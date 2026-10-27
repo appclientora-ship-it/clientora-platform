@@ -9,3 +9,5 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: MANUS_OAUTH_API_URL
+        value: https://api.manus.ai
