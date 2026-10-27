@@ -3,11 +3,9 @@ services:
     name: clientora-platform
     runtime: node
     plan: free
-    buildCommand: corepack enable && corepack install --global pnpm@10.18.0 && pnpm install --frozen-lockfile && pnpm build
-    startCommand: pnpm start
+    buildCommand: npm install --global pnpm@10.18.0 && pnpm install --frozen-lockfile && pnpm build
+    startCommand: node dist/index.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PNPM_VERSION
-        value: 10.18.0
