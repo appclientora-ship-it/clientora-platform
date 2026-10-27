@@ -1,0 +1,41 @@
+import { trpc } from "@/lib/trpc";
+import { useMemo, useState } from "react";
+import { useRoute } from "wouter";
+
+function toMinutes(value: string) { const [h, m] = value.split(":").map(Number); return h * 60 + m; }
+function money(value: number, currency: string) { return `${value} ${currency}`; }
+function stars(rating: number) { return "★".repeat(Math.round(rating)) + "☆".repeat(Math.max(0, 5 - Math.round(rating))); }
+
+export default function BookingPage() {
+  const [, params] = useRoute("/book/:slug");
+  const slug = params?.slug ?? "";
+  const catalog = trpc.publicBooking.catalog.useQuery({ slug });
+  const create = trpc.publicBooking.create.useMutation();
+  const review = trpc.publicBooking.review.useMutation();
+  const [selectedServices, setSelectedServices] = useState<number[]>([]);
+  const [form, setForm] = useState({ staffId: "", date: "", time: "", clientName: "", phone: "", note: "" });
+  const [reviewForm, setReviewForm] = useState({ bookingId: "", phone: "", rating: 5, comment: "" });
+  const [activeStaffId, setActiveStaffId] = useState<number | null>(null);
+  const selected = catalog.data?.services.filter(service => selectedServices.includes(service.id)) ?? [];
+  const selectedStaff = catalog.data?.staff.find(item => item.id === Number(form.staffId));
+  const activeStaff = catalog.data?.staff.find(item => item.id === activeStaffId) ?? selectedStaff;
+  const activeReviews = useMemo(() => catalog.data?.reviews.filter(item => item.staffId === activeStaff?.id).slice(0, 5) ?? [], [catalog.data?.reviews, activeStaff?.id]);
+  const total = selected.reduce((sum, item) => sum + item.price, 0);
+  const duration = selected.reduce((sum, item) => sum + item.durationMinutes, 0);
+  if (catalog.isLoading) return <div className="center-page">جاري تحميل مواعيد الشركة…</div>;
+  if (!catalog.data) return <div className="center-page"><h1>الرابط غير متاح</h1><p>هذه الشركة غير موجودة أو أوقفت الحجوزات العامة.</p></div>;
+  const { tenant } = catalog.data;
+  return <div className="booking-page" dir="rtl">
+    <header className="booking-header"><div className="brand"><span className="brand-mark">C</span><strong>Clientora</strong></div><span className="secure-label">حجز مباشر وآمن</span></header>
+    <main className="booking-main"><div className="booking-intro"><span className="eyebrow">{tenant.city || ""}</span><h1>احجز موعدك لدى {tenant.name}</h1><p>اختر الخدمة والموظف المناسب، شاهد تقييمات العملاء، ثم اختر الوقت المتاح.</p></div>
+      <div className="booking-layout"><section className="card booking-form"><div className="steps"><b>1 الخدمات</b><span>2 الموظف والموعد</span><span>3 التأكيد</span></div><h2>اختر خدماتك</h2>
+        <div className="service-options">{catalog.data.services.map(service => <button type="button" key={service.id} className={`service-option ${selectedServices.includes(service.id) ? "selected" : ""}`} onClick={() => setSelectedServices(current => current.includes(service.id) ? current.filter(id => id !== service.id) : [...current, service.id])}><span><strong>{service.name}</strong><small>{service.category} · {service.durationMinutes} دقيقة</small></span><b>{money(service.price, tenant.currency)}</b></button>)}</div>
+        <h2>اختر الموظف</h2><div className="specialist-list">{catalog.data.staff.map(item => <button type="button" key={item.id} className={`specialist-card ${form.staffId === String(item.id) ? "selected" : ""}`} onClick={() => { setForm({ ...form, staffId: String(item.id) }); setActiveStaffId(item.id); }}><span className="specialist-avatar" style={{ background: item.color }}>{item.name.slice(0, 1)}</span><span className="specialist-main"><strong>{item.name}</strong><small>{item.role}</small><span className="rating-line" aria-label={`${item.rating} من 5`}><b>{stars(item.rating || 0)}</b><em>{item.rating ? item.rating.toFixed(1) : "جديد"} · {item.reviewCount} مراجعة</em></span></span><span className="specialist-radio">{form.staffId === String(item.id) ? "✓" : ""}</span></button>)}</div>
+        {activeStaff && <div className="review-preview"><div className="review-preview-head"><div><span className="eyebrow">آراء العملاء عن {activeStaff.name}</span><strong>{stars(activeStaff.rating || 0)} <small>{activeStaff.reviewCount} مراجعة موثقة</small></strong></div><button type="button" className="text-button" onClick={() => setActiveStaffId(null)}>إغلاق</button></div>{activeReviews.length ? activeReviews.map(item => <div className="review-item" key={item.id}><span className="review-stars">{stars(item.rating)}</span><p>{item.comment || "تقييم بدون تعليق"}</p><small>عميل بعد زيارة فعلية</small></div>) : <p className="muted-text">لا توجد مراجعات منشورة لهذا الموظف بعد.</p>}</div>}
+        <div className="form-grid two"><label>التاريخ<input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></label><label>الوقت<input type="time" value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} /></label><label>الاسم<input value={form.clientName} onChange={e => setForm({ ...form, clientName: e.target.value })} placeholder="الاسم الكامل" /></label><label>رقم الهاتف<input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="مثال: 96890000000" dir="ltr" /></label><label className="span-two">ملاحظة اختيارية<input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="أي طلب خاص" /></label></div>
+        {create.error && <p className="error-text">{create.error.message}</p>}{create.data && <div className="success-box">تم استلام طلب الحجز رقم #{create.data.bookingId}. بعد حضورك وإتمام الخدمة يمكنك تقييم الموظف من النموذج أدناه.</div>}<button className="primary-button full" disabled={create.isPending || !selectedServices.length || !form.staffId} onClick={() => create.mutate({ slug, clientName: form.clientName, phone: form.phone, serviceIds: selectedServices, staffId: Number(form.staffId), date: form.date, startMinutes: toMinutes(form.time), note: form.note || undefined })}>{create.isPending ? "جاري إرسال الحجز…" : "تأكيد طلب الحجز"}</button>
+      </section><aside className="booking-summary card"><span className="eyebrow">ملخص الطلب</span><h3>{selected.length ? `${selected.length} خدمات مختارة` : "لم تختر خدمة بعد"}</h3>{selected.map(item => <div className="summary-line" key={item.id}><span>{item.name}</span><b>{money(item.price, tenant.currency)}</b></div>)}<div className="summary-total"><span>الإجمالي · {duration || 0} دقيقة</span><strong>{money(total, tenant.currency)}</strong></div><div className="review-form"><h3>قيّم زيارتك السابقة</h3><p>التقييم متاح فقط بعد أن تسجل الشركة حضورك وإتمام الخدمة.</p><label>رقم الحجز<input inputMode="numeric" value={reviewForm.bookingId} onChange={e => setReviewForm({ ...reviewForm, bookingId: e.target.value })} placeholder="#123" /></label><label>رقم الهاتف<input value={reviewForm.phone} onChange={e => setReviewForm({ ...reviewForm, phone: e.target.value })} dir="ltr" /></label><div className="rating-picker" aria-label="اختيار التقييم">{[1, 2, 3, 4, 5].map(value => <button type="button" key={value} className={value <= reviewForm.rating ? "active" : ""} onClick={() => setReviewForm({ ...reviewForm, rating: value })}>★</button>)}</div><textarea value={reviewForm.comment} onChange={e => setReviewForm({ ...reviewForm, comment: e.target.value })} placeholder="اكتب رأيك عن الخدمة والموظف (اختياري)" rows={3} />{review.error && <p className="error-text">{review.error.message}</p>}{review.data && <p className="success-box">شكرًا لك، تم نشر تقييمك بعد التحقق من الحجز.</p>}<button className="outline-button full" disabled={review.isPending || !reviewForm.bookingId || !reviewForm.phone} onClick={() => review.mutate({ slug, bookingId: Number(reviewForm.bookingId.replace(/\D/g, "")), phone: reviewForm.phone, rating: reviewForm.rating, comment: reviewForm.comment || undefined })}>{review.isPending ? "جاري حفظ التقييم…" : "إرسال التقييم"}</button></div></aside></div>
+      <footer className="booking-footer"><span>تواصل مع Clientora</span><a href="tel:+96896119298">+968 9611 9298</a><a href="mailto:Appclientora@gmail.com">Appclientora@gmail.com</a><a href="https://www.instagram.com/clientora.app/" target="_blank" rel="noreferrer">Instagram @clientora.app</a></footer>
+    </main>
+  </div>;
+}

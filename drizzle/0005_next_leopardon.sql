@@ -1,0 +1,1 @@
+ALTER TABLE `tenants` MODIFY COLUMN `status` enum('trial','active','suspended') NOT NULL DEFAULT 'active';

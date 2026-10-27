@@ -1,0 +1,1 @@
+ALTER TABLE `tenants` ADD `websiteUrl` varchar(500);

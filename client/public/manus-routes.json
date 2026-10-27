@@ -1,0 +1,1 @@
+{"routes":[{"path":"/","title":"Clientora — منصة الحجوزات"},{"path":"/book/:slug","title":"حجز موعد"},{"path":"/workspace/:tenantId","title":"مساحة تشغيل الشركة"},{"path":"/404","title":"غير موجود"}]}

@@ -1,0 +1,12 @@
+{
+  "name": "Clientora — منصة الحجوزات",
+  "short_name": "Clientora",
+  "description": "إدارة الحجوزات والموظفين والإشعارات للشركات والصالونات",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#effaf7",
+  "theme_color": "#0d8f83",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [{"src":"/clientora-logo.png","sizes":"256x256","type":"image/png","purpose":"any maskable"}]
+}
