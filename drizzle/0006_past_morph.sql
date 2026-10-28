@@ -9,4 +9,4 @@ CREATE TABLE IF NOT EXISTS `passwordResets` (
 	CONSTRAINT `passwordResets_tokenHash_unique` UNIQUE(`tokenHash`)
 );
 --> statement-breakpoint
-ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `passwordHash` varchar(255);
+ALTER TABLE `users` ADD COLUMN `passwordHash` varchar(255);
