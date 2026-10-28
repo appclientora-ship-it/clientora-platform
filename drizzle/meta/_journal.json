@@ -12,64 +12,43 @@
     {
       "idx": 1,
       "version": "5",
-      "when": 1792849949098,
-      "tag": "0001_unique_mauler",
+      "when": 1792767034546,
+      "tag": "0001_famous_reaper",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "5",
-      "when": 1792850080621,
-      "tag": "0002_damp_prima",
+      "when": 1792768307736,
+      "tag": "0002_wet_mentor",
       "breakpoints": true
     },
     {
       "idx": 3,
       "version": "5",
-      "when": 1792858132678,
-      "tag": "0003_green_eternity",
+      "when": 1792769137016,
+      "tag": "0003_mature_boom_boom",
       "breakpoints": true
     },
     {
       "idx": 4,
       "version": "5",
-      "when": 1792948677977,
-      "tag": "0004_burly_magus",
+      "when": 1792827657752,
+      "tag": "0004_neat_wendell_vaughn",
       "breakpoints": true
     },
     {
       "idx": 5,
       "version": "5",
-      "when": 1792952924031,
-      "tag": "0005_next_leopardon",
+      "when": 1792829465522,
+      "tag": "0005_furry_stature",
       "breakpoints": true
     },
     {
       "idx": 6,
       "version": "5",
-      "when": 1792963355558,
-      "tag": "0006_flowery_doctor_doom",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "5",
-      "when": 1793008623085,
-      "tag": "0007_little_enchantress",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "5",
-      "when": 1793009000000,
-      "tag": "0008_sincere_reviews",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "5",
-      "when": 1793009400000,
-      "tag": "0009_subscription_approval",
+      "when": 1793190090001,
+      "tag": "0006_past_morph",
       "breakpoints": true
     }
   ]

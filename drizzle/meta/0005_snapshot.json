@@ -1,11 +1,11 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "40863a21-4f65-4546-b444-8be7d14334bb",
-  "prevId": "8a019ec3-b432-4fcc-80d6-7df5ab3f9a4a",
+  "id": "37507795-0c03-4c28-b329-5127cf27cbf9",
+  "prevId": "ed0bd7a6-da17-4dd9-9cb7-df1bd49c2daa",
   "tables": {
-    "audit_logs": {
-      "name": "audit_logs",
+    "auditLogs": {
+      "name": "auditLogs",
       "columns": {
         "id": {
           "name": "id",
@@ -61,8 +61,8 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "audit_logs_id": {
-          "name": "audit_logs_id",
+        "auditLogs_id": {
+          "name": "auditLogs_id",
           "columns": [
             "id"
           ]
@@ -71,8 +71,8 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "booking_items": {
-      "name": "booking_items",
+    "bookingItems": {
+      "name": "bookingItems",
       "columns": {
         "id": {
           "name": "id",
@@ -127,8 +127,8 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "booking_items_id": {
-          "name": "booking_items_id",
+        "bookingItems_id": {
+          "name": "bookingItems_id",
           "columns": [
             "id"
           ]
@@ -194,14 +194,16 @@
           "type": "int",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": 60
         },
         "totalPrice": {
           "name": "totalPrice",
           "type": "int",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": 0
         },
         "status": {
           "name": "status",
@@ -229,7 +231,7 @@
         },
         "note": {
           "name": "note",
-          "type": "varchar(500)",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -284,7 +286,7 @@
           "name": "phone",
           "type": "varchar(40)",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "visits": {
@@ -311,16 +313,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "client_tenant_phone": {
-          "name": "client_tenant_phone",
-          "columns": [
-            "tenantId",
-            "phone"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "clients_id": {
@@ -333,8 +326,8 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "notifications": {
-      "name": "notifications",
+    "expenses": {
+      "name": "expenses",
       "columns": {
         "id": {
           "name": "id",
@@ -350,23 +343,52 @@
           "notNull": true,
           "autoincrement": false
         },
-        "title": {
-          "name": "title",
-          "type": "varchar(180)",
+        "category": {
+          "name": "category",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "body": {
-          "name": "body",
-          "type": "varchar(500)",
+        "description": {
+          "name": "description",
+          "type": "varchar(240)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "readAt": {
-          "name": "readAt",
-          "type": "timestamp",
+        "vendor": {
+          "name": "vendor",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date": {
+          "name": "date",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "paymentMethod": {
+          "name": "paymentMethod",
+          "type": "varchar(40)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'نقدي'"
+        },
+        "createdBy": {
+          "name": "createdBy",
+          "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -383,8 +405,8 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "notifications_id": {
-          "name": "notifications_id",
+        "expenses_id": {
+          "name": "expenses_id",
           "columns": [
             "id"
           ]
@@ -487,15 +509,14 @@
         },
         "role": {
           "name": "role",
-          "type": "varchar(120)",
+          "type": "varchar(160)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "'متخصص'"
+          "autoincrement": false
         },
         "color": {
           "name": "color",
-          "type": "varchar(20)",
+          "type": "varchar(16)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
@@ -523,8 +544,8 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "tenant_members": {
-      "name": "tenant_members",
+    "tenantMembers": {
+      "name": "tenantMembers",
       "columns": {
         "id": {
           "name": "id",
@@ -564,20 +585,11 @@
           "default": "(now())"
         }
       },
-      "indexes": {
-        "tenant_member_unique": {
-          "name": "tenant_member_unique",
-          "columns": [
-            "tenantId",
-            "userId"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "tenant_members_id": {
-          "name": "tenant_members_id",
+        "tenantMembers_id": {
+          "name": "tenantMembers_id",
           "columns": [
             "id"
           ]
@@ -610,44 +622,17 @@
           "notNull": true,
           "autoincrement": false
         },
-        "websiteUrl": {
-          "name": "websiteUrl",
-          "type": "varchar(500)",
+        "status": {
+          "name": "status",
+          "type": "enum('active','trial','suspended')",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'trial'"
         },
         "city": {
           "name": "city",
           "type": "varchar(120)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "phone": {
-          "name": "phone",
-          "type": "varchar(40)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "email": {
-          "name": "email",
-          "type": "varchar(320)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "address": {
-          "name": "address",
-          "type": "varchar(240)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "varchar(500)",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -659,30 +644,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'ر.ع'"
-        },
-        "openMinutes": {
-          "name": "openMinutes",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 600
-        },
-        "closeMinutes": {
-          "name": "closeMinutes",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1320
-        },
-        "status": {
-          "name": "status",
-          "type": "enum('trial','active','suspended')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'active'"
         },
         "createdAt": {
           "name": "createdAt",

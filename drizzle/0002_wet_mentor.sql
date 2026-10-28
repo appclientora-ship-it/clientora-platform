@@ -1,0 +1,1 @@
+ALTER TABLE `bookings` ADD `source` enum('dashboard','online') DEFAULT 'dashboard' NOT NULL;

@@ -1,0 +1,1 @@
+ALTER TABLE `services` ADD `category` varchar(120) DEFAULT 'عام' NOT NULL;

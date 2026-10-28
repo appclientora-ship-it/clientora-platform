@@ -1,1 +1,1 @@
-{"routes":[{"path":"/","title":"Clientora — منصة الحجوزات"},{"path":"/book/:slug","title":"حجز موعد"},{"path":"/workspace/:tenantId","title":"مساحة تشغيل الشركة"},{"path":"/404","title":"غير موجود"}]}
+{"routes":[{"path":"/","title":"Clientora — لوحة التحكم"},{"path":"/login","title":"تسجيل الدخول"},{"path":"/register","title":"إنشاء حساب"},{"path":"/forgot-password","title":"استعادة كلمة المرور"},{"path":"/reset-password","title":"تعيين كلمة المرور"},{"path":"/book/:slug","title":"الحجز الأونلاين"},{"path":"/404","title":"الصفحة غير موجودة"}]}

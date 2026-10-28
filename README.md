@@ -1,4 +1,4 @@
-# Clientora — منصة الحجوزات
+# BookingHub — منصة إدارة الحجوزات
 
 React / Express / tRPC / Drizzle starter, adapted from the Sandbox web-db-user template.
 

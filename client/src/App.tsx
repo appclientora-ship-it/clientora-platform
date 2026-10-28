@@ -5,42 +5,16 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
-import BookingPage from "./pages/BookingPage";
-import WorkspacePage from "./pages/WorkspacePage";
+import OnlineBooking from "./pages/OnlineBooking";
+import AuthPage from "./pages/AuthPage";
+import { trpc } from "@/lib/trpc";
+import { Redirect } from "wouter";
+
+function ProtectedHome() { const auth = trpc.auth.me.useQuery(); if (auth.isLoading) return <div className="auth-loading">جارٍ التحقق من الجلسة...</div>; return auth.data ? <Home /> : <Redirect to="/login" />; }
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
-  return (
-    <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/book/:slug"} component={BookingPage} />
-      <Route path={"/workspace/:tenantId"} component={WorkspacePage} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
-      <Route component={NotFound} />
-    </Switch>
-  );
+  return <Switch><Route path="/" component={ProtectedHome} /><Route path="/login"><AuthPage mode="login" /></Route><Route path="/register"><AuthPage mode="register" /></Route><Route path="/forgot-password"><AuthPage mode="forgot" /></Route><Route path="/reset-password"><AuthPage mode="reset" /></Route><Route path="/book/:slug" component={OnlineBooking} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>;
 }
-
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
-function App() {
-  return (
-    <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
-  );
+export default function App() {
+  return <ErrorBoundary><ThemeProvider defaultTheme="light"><TooltipProvider><Toaster/><Router/></TooltipProvider></ThemeProvider></ErrorBoundary>;
 }
-
-export default App;
