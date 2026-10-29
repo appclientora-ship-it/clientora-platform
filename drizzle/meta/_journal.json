@@ -50,6 +50,13 @@
       "when": 1793190090001,
       "tag": "0006_past_morph",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1793267956729,
+      "tag": "0010_clientora_operations",
+      "breakpoints": true
     }
   ]
 }

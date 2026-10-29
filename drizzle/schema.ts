@@ -3,126 +3,51 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-or
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
-  name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-  passwordHash: varchar("passwordHash", { length: 255 }),
+  name: text("name"), email: varchar("email", { length: 320 }), loginMethod: varchar("loginMethod", { length: 64 }),
+  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(), language: varchar("language", { length: 10 }).default("ar"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(), updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(), lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(), passwordHash: varchar("passwordHash", { length: 255 }),
 });
-
 export const passwordResets = mysqlTable("passwordResets", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  tokenHash: varchar("tokenHash", { length: 128 }).notNull().unique(),
-  expiresAt: timestamp("expiresAt").notNull(),
-  usedAt: timestamp("usedAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(), userId: int("userId").notNull(), tokenHash: varchar("tokenHash", { length: 128 }).notNull().unique(), expiresAt: timestamp("expiresAt").notNull(), usedAt: timestamp("usedAt"), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
-
 export const tenants = mysqlTable("tenants", {
-  id: int("id").autoincrement().primaryKey(),
-  name: varchar("name", { length: 160 }).notNull(),
-  slug: varchar("slug", { length: 120 }).notNull().unique(),
-  status: mysqlEnum("status", ["active", "trial", "suspended"]).default("trial").notNull(),
-  city: varchar("city", { length: 120 }),
-  currency: varchar("currency", { length: 12 }).default("ر.ع").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(), name: varchar("name", { length: 160 }).notNull(), slug: varchar("slug", { length: 120 }).notNull().unique(),
+  status: mysqlEnum("status", ["active", "trial", "suspended"]).default("trial").notNull(), city: varchar("city", { length: 120 }), countryCode: varchar("countryCode", { length: 2 }).default("OM"), currency: varchar("currency", { length: 12 }).default("ر.ع").notNull(), timezone: varchar("timezone", { length: 64 }).default("Asia/Muscat"), defaultLanguage: varchar("defaultLanguage", { length: 10 }).default("ar"), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
-
 export const tenantMembers = mysqlTable("tenantMembers", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").notNull(),
-  userId: int("userId").notNull(),
-  role: mysqlEnum("role", ["owner", "manager", "staff"]).default("staff").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), userId: int("userId").notNull(), role: mysqlEnum("role", ["owner", "manager", "staff"]).default("staff").notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
-
 export const staff = mysqlTable("staff", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").notNull(),
-  name: varchar("name", { length: 160 }).notNull(),
-  role: varchar("role", { length: 160 }).notNull(),
-  color: varchar("color", { length: 16 }).default("#0d8f83").notNull(),
-  active: int("active").default(1).notNull(),
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), userId: int("userId"), name: varchar("name", { length: 160 }).notNull(), role: varchar("role", { length: 160 }).notNull(), color: varchar("color", { length: 16 }).default("#0d8f83").notNull(), photoUrl: varchar("photoUrl", { length: 500 }), bio: varchar("bio", { length: 500 }), active: int("active").default(1).notNull(),
 });
-
+export const staffWorkingHours = mysqlTable("staffWorkingHours", {
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), staffId: int("staffId").notNull(), weekday: int("weekday").notNull(), openMinutes: int("openMinutes").notNull(), closeMinutes: int("closeMinutes").notNull(), active: int("active").default(1).notNull(),
+});
+export const staffInvites = mysqlTable("staffInvites", {
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), staffId: int("staffId"), email: varchar("email", { length: 320 }), code: varchar("code", { length: 64 }).notNull().unique(), role: mysqlEnum("role", ["staff", "manager"]).default("staff").notNull(), expiresAt: timestamp("expiresAt").notNull(), acceptedAt: timestamp("acceptedAt"), createdByUserId: int("createdByUserId").notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
 export const services = mysqlTable("services", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").notNull(),
-  name: varchar("name", { length: 160 }).notNull(),
-  category: varchar("category", { length: 120 }).default("عام").notNull(),
-  durationMinutes: int("durationMinutes").notNull(),
-  price: int("price").notNull(),
-  active: int("active").default(1).notNull(),
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), name: varchar("name", { length: 160 }).notNull(), category: varchar("category", { length: 120 }).default("عام").notNull(), durationMinutes: int("durationMinutes").notNull(), price: int("price").notNull(), active: int("active").default(1).notNull(),
 });
-
 export const clients = mysqlTable("clients", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").notNull(),
-  name: varchar("name", { length: 160 }).notNull(),
-  phone: varchar("phone", { length: 40 }),
-  visits: int("visits").default(0).notNull(),
-  totalSpent: int("totalSpent").default(0).notNull(),
-  lastVisit: varchar("lastVisit", { length: 10 }),
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), name: varchar("name", { length: 160 }).notNull(), phone: varchar("phone", { length: 40 }), visits: int("visits").default(0).notNull(), totalSpent: int("totalSpent").default(0).notNull(), lastVisit: varchar("lastVisit", { length: 10 }),
 });
-
 export const bookings = mysqlTable("bookings", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").notNull(),
-  clientId: int("clientId").notNull(),
-  staffId: int("staffId").notNull(),
-  serviceId: int("serviceId").notNull(),
-  date: varchar("date", { length: 10 }).notNull(),
-  startMinutes: int("startMinutes").notNull(),
-  durationMinutes: int("durationMinutes").default(60).notNull(),
-  totalPrice: int("totalPrice").default(0).notNull(),
-  status: mysqlEnum("status", ["new", "confirmed", "arrived", "cancelled", "no_show"]).default("new").notNull(),
-  source: mysqlEnum("source", ["dashboard", "online"]).default("dashboard").notNull(),
-  paid: int("paid").default(0).notNull(),
-  note: text("note"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), clientId: int("clientId").notNull(), staffId: int("staffId").notNull(), serviceId: int("serviceId").notNull(), date: varchar("date", { length: 10 }).notNull(), startMinutes: int("startMinutes").notNull(), durationMinutes: int("durationMinutes").default(60).notNull(), totalPrice: int("totalPrice").default(0).notNull(), status: mysqlEnum("status", ["new", "confirmed", "arrived", "completed", "cancelled", "no_show"]).default("new").notNull(), source: mysqlEnum("source", ["dashboard", "online"]).default("dashboard").notNull(), paid: int("paid").default(0).notNull(), note: text("note"), completedAt: timestamp("completedAt"), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
-
 export const bookingItems = mysqlTable("bookingItems", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").notNull(),
-  bookingId: int("bookingId").notNull(),
-  serviceId: int("serviceId").notNull(),
-  staffId: int("staffId").notNull(),
-  durationMinutes: int("durationMinutes").notNull(),
-  price: int("price").notNull(),
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), bookingId: int("bookingId").notNull(), serviceId: int("serviceId").notNull(), staffId: int("staffId").notNull(), durationMinutes: int("durationMinutes").notNull(), price: int("price").notNull(),
 });
-
+export const notifications = mysqlTable("notifications", {
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), recipientUserId: int("recipientUserId"), recipientStaffId: int("recipientStaffId"), type: varchar("type", { length: 60 }).notNull(), title: varchar("title", { length: 180 }).notNull(), body: varchar("body", { length: 500 }).notNull(), entity: varchar("entity", { length: 80 }), entityId: int("entityId"), readAt: timestamp("readAt"), createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export const bookingReviews = mysqlTable("bookingReviews", {
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), bookingId: int("bookingId").notNull().unique(), clientId: int("clientId").notNull(), staffId: int("staffId").notNull(), rating: int("rating").notNull(), comment: varchar("comment", { length: 1000 }), published: int("published").default(0).notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
 export const auditLogs = mysqlTable("auditLogs", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId"),
-  actorUserId: int("actorUserId"),
-  action: varchar("action", { length: 120 }).notNull(),
-  entity: varchar("entity", { length: 80 }).notNull(),
-  entityId: int("entityId"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId"), actorUserId: int("actorUserId"), action: varchar("action", { length: 120 }).notNull(), entity: varchar("entity", { length: 80 }).notNull(), entityId: int("entityId"), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
-
 export const expenses = mysqlTable("expenses", {
-  id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").notNull(),
-  category: varchar("category", { length: 100 }).notNull(),
-  description: varchar("description", { length: 240 }).notNull(),
-  vendor: varchar("vendor", { length: 160 }),
-  amount: int("amount").notNull(),
-  date: varchar("date", { length: 10 }).notNull(),
-  paymentMethod: varchar("paymentMethod", { length: 40 }).default("نقدي").notNull(),
-  createdBy: int("createdBy"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), category: varchar("category", { length: 100 }).notNull(), description: varchar("description", { length: 240 }).notNull(), vendor: varchar("vendor", { length: 160 }), amount: int("amount").notNull(), date: varchar("date", { length: 10 }).notNull(), paymentMethod: varchar("paymentMethod", { length: 40 }).default("نقدي").notNull(), createdBy: int("createdBy"), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
-
-export type User = typeof users.$inferSelect;
-export type InsertUser = typeof users.$inferInsert;
-export type Tenant = typeof tenants.$inferSelect;
-export type Staff = typeof staff.$inferSelect;
-export type Service = typeof services.$inferSelect;
-export type Client = typeof clients.$inferSelect;
-export type Booking = typeof bookings.$inferSelect;
+export type User = typeof users.$inferSelect; export type InsertUser = typeof users.$inferInsert; export type Tenant = typeof tenants.$inferSelect; export type Staff = typeof staff.$inferSelect; export type Service = typeof services.$inferSelect; export type Client = typeof clients.$inferSelect; export type Booking = typeof bookings.$inferSelect;

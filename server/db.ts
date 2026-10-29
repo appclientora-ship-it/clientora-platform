@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, auditLogs, bookingItems, bookings, clients, expenses, services, staff, tenants, tenantMembers, users } from "../drizzle/schema";
+import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clients, expenses, notifications, services, staff, staffInvites, staffWorkingHours, tenants, tenantMembers, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -53,13 +54,14 @@ export async function listDetailedBookings(tenantId:number,date:string) {
     .where(and(eq(bookings.tenantId,tenantId),eq(bookings.date,date))).orderBy(bookings.startMinutes);
   return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes || row.service.durationMinutes, price:row.booking.totalPrice || row.service.price, staffName:row.staff.name}));
 }
-export async function updateBookingForTenant(tenantId:number, bookingId:number, patch:{status?:"new"|"confirmed"|"arrived"|"cancelled"|"no_show";paid?:boolean;note?:string;durationMinutes?:number;staffId?:number;startMinutes?:number;date?:string}, actorUserId:number) {
+export async function updateBookingForTenant(tenantId:number, bookingId:number, patch:{status?:"new"|"confirmed"|"arrived"|"completed"|"cancelled"|"no_show";paid?:boolean;note?:string;durationMinutes?:number;staffId?:number;startMinutes?:number;date?:string}, actorUserId:number) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   const rows = await db.select().from(bookings).where(and(eq(bookings.id,bookingId),eq(bookings.tenantId,tenantId))).limit(1); const booking = rows[0];
   if (!booking) throw new Error("الحجز غير موجود");
   if (patch.status === "cancelled" && booking.paid) throw new Error("لا يمكن إلغاء حجز مدفوع قبل معالجة الاسترجاع المالي");
   const set: Partial<typeof bookings.$inferInsert> = {};
   if (patch.status !== undefined) set.status = patch.status;
+  if (patch.status === "completed") set.completedAt = new Date();
   if (patch.paid !== undefined) set.paid = patch.paid ? 1 : 0;
   if (patch.note !== undefined) set.note = patch.note;
   if (patch.durationMinutes !== undefined) set.durationMinutes = Math.max(15, Math.min(480, patch.durationMinutes));
@@ -67,18 +69,20 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
   if (patch.startMinutes !== undefined) set.startMinutes = Math.max(0, Math.min(1439, patch.startMinutes));
   if (patch.date !== undefined) set.date = patch.date;
   await db.update(bookings).set(set).where(eq(bookings.id,bookingId));
-  await db.insert(auditLogs).values({tenantId,actorUserId,action:patch.status === "cancelled" ? "booking.cancelled" : patch.paid ? "booking.paid" : "booking.updated",entity:"booking",entityId:bookingId});
+  const action = patch.status === "cancelled" ? "booking.cancelled" : patch.status === "completed" ? "booking.completed" : patch.paid ? "booking.paid" : "booking.updated";
+  await db.insert(auditLogs).values({tenantId,actorUserId,action,entity:"booking",entityId:bookingId});
+  await db.insert(notifications).values({tenantId,recipientStaffId:booking.staffId,type:action,title:action === "booking.cancelled" ? "تم إلغاء حجز" : action === "booking.completed" ? "اكتملت الخدمة" : "تحديث على حجز",body:`تم تحديث حجز العميل رقم ${bookingId}.`,entity:"booking",entityId:bookingId});
   return (await db.select().from(bookings).where(eq(bookings.id,bookingId)).limit(1))[0];
 }
 export async function listNotifications(tenantId:number) {
   const db = await getDb(); if (!db) return [];
-  return db.select().from(auditLogs).where(eq(auditLogs.tenantId,tenantId)).orderBy(desc(auditLogs.createdAt)).limit(20);
+  return db.select().from(notifications).where(eq(notifications.tenantId,tenantId)).orderBy(desc(notifications.createdAt)).limit(20);
 }
 export async function getEmployeeReports(tenantId:number,fromDate:string,toDate:string) {
   const db = await getDb(); if (!db) return {employees:[],totals:{bookings:0,completed:0,cancelled:0,revenue:0,paidRevenue:0}};
   const staffRows = await db.select().from(staff).where(eq(staff.tenantId,tenantId));
   const rows = await db.select({booking:bookings,service:services}).from(bookings).innerJoin(services,eq(bookings.serviceId,services.id)).where(and(eq(bookings.tenantId,tenantId),gte(bookings.date,fromDate),lte(bookings.date,toDate)));
-  const employees = staffRows.map(person => { const mine=rows.filter(row=>row.booking.staffId===person.id); const active=mine.filter(row=>row.booking.status!=="cancelled"); return {id:person.id,name:person.name,role:person.role,bookings:mine.length,completed:mine.filter(row=>row.booking.status==="arrived").length,cancelled:mine.filter(row=>row.booking.status==="cancelled").length,noShow:mine.filter(row=>row.booking.status==="no_show").length,revenue:active.reduce((sum,row)=>sum+row.service.price,0),paidRevenue:active.filter(row=>row.booking.paid).reduce((sum,row)=>sum+row.service.price,0)}; });
+  const employees = staffRows.map(person => { const mine=rows.filter(row=>row.booking.staffId===person.id); const active=mine.filter(row=>row.booking.status!=="cancelled"); return {id:person.id,name:person.name,role:person.role,bookings:mine.length,completed:mine.filter(row=>row.booking.status==="completed" || row.booking.status==="arrived").length,cancelled:mine.filter(row=>row.booking.status==="cancelled").length,noShow:mine.filter(row=>row.booking.status==="no_show").length,revenue:active.reduce((sum,row)=>sum+(row.booking.totalPrice || row.service.price),0),paidRevenue:active.filter(row=>row.booking.paid).reduce((sum,row)=>sum+(row.booking.totalPrice || row.service.price),0)}; });
   return {employees,totals:employees.reduce((total,row)=>({bookings:total.bookings+row.bookings,completed:total.completed+row.completed,cancelled:total.cancelled+row.cancelled,revenue:total.revenue+row.revenue,paidRevenue:total.paidRevenue+row.paidRevenue}),{bookings:0,completed:0,cancelled:0,revenue:0,paidRevenue:0})};
 }
 export async function listExpenses(tenantId:number,fromDate:string,toDate:string) { const db=await getDb(); return db ? db.select().from(expenses).where(and(eq(expenses.tenantId,tenantId),gte(expenses.date,fromDate),lte(expenses.date,toDate))).orderBy(desc(expenses.date),desc(expenses.id)) : []; }
@@ -100,11 +104,13 @@ export async function getPublicBookingCatalog(slug: string) {
   const db = await getDb(); if (!db) return undefined;
   const tenantRows = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
   const tenant = tenantRows[0]; if (!tenant || tenant.status === "suspended") return undefined;
-  const [serviceRows, staffRows] = await Promise.all([
+  const [serviceRows, staffRows, reviewRows] = await Promise.all([
     db.select().from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1))),
     db.select().from(staff).where(and(eq(staff.tenantId, tenant.id), eq(staff.active, 1))),
+    db.select().from(bookingReviews).where(and(eq(bookingReviews.tenantId, tenant.id), eq(bookingReviews.published, 1))).orderBy(desc(bookingReviews.createdAt)),
   ]);
-  return { tenant, services: serviceRows, staff: staffRows };
+  const staffWithRatings = staffRows.map(person => { const mine=reviewRows.filter(review=>review.staffId===person.id); const rating=mine.length ? mine.reduce((sum,item)=>sum+item.rating,0)/mine.length : 0; return {...person,rating,reviewCount:mine.length}; });
+  return { tenant, services: serviceRows, staff: staffWithRatings, reviews: reviewRows };
 }
 export async function createPublicBooking(input: {slug:string; clientName:string; phone:string; serviceId:number; serviceIds?:number[]; staffId:number; date:string; startMinutes:number; note?:string}) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
@@ -130,6 +136,27 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   const bookingId = Number(result[0].insertId);
   await db.insert(bookingItems).values(selectedServices.map(item => ({tenantId:tenant.id,bookingId,serviceId:item.id,staffId:input.staffId,durationMinutes:item.durationMinutes,price:item.price})));
   await db.insert(auditLogs).values({tenantId:tenant.id,actorUserId:null,action:"booking.created",entity:"booking",entityId:bookingId});
-  return { id: bookingId, tenantName: tenant.name, serviceName: selectedServices.map(item=>item.name).join(" + "), totalDuration, totalPrice };
+  await db.insert(notifications).values({tenantId:tenant.id,recipientStaffId:input.staffId,type:"booking.created",title:"حجز أونلاين جديد",body:`تم حجز ${selectedServices.map(item=>item.name).join(" + ")} للعميل ${input.clientName}.`,entity:"booking",entityId:bookingId});
+  return { id: bookingId, bookingId, tenantId: tenant.id, tenantName: tenant.name, serviceName: selectedServices.map(item=>item.name).join(" + "), totalDuration, totalPrice };
 }
+export async function createBookingReview(input:{tenantId:number;bookingId:number;phone:string;rating:number;comment?:string}) {
+  const db=await getDb(); if(!db) throw new Error("Database is not available");
+  if(input.rating<1 || input.rating>5) throw new Error("التقييم يجب أن يكون بين نجمة و5 نجوم");
+  const booking=(await db.select().from(bookings).where(and(eq(bookings.id,input.bookingId),eq(bookings.tenantId,input.tenantId))).limit(1))[0];
+  if(!booking || booking.status!=="completed") throw new Error("يمكن تقييم الحجز بعد اكتمال الخدمة فقط");
+  const client=(await db.select().from(clients).where(and(eq(clients.id,booking.clientId),eq(clients.tenantId,input.tenantId))).limit(1))[0];
+  if(!client || client.phone !== input.phone) throw new Error("رقم الهاتف لا يطابق بيانات الحجز");
+  const existing=(await db.select().from(bookingReviews).where(eq(bookingReviews.bookingId,input.bookingId)).limit(1))[0]; if(existing) throw new Error("تم تقييم هذا الحجز من قبل");
+  const result=await db.insert(bookingReviews).values({tenantId:input.tenantId,bookingId:booking.id,clientId:booking.clientId,staffId:booking.staffId,rating:input.rating,comment:input.comment||null,published:0});
+  return (await db.select().from(bookingReviews).where(eq(bookingReviews.id,Number(result[0].insertId))).limit(1))[0];
+}
+export async function listBookingReviews(tenantId:number) { const db=await getDb(); return db ? db.select().from(bookingReviews).where(eq(bookingReviews.tenantId,tenantId)).orderBy(desc(bookingReviews.createdAt)) : []; }
+export async function publishBookingReview(tenantId:number,reviewId:number,published:boolean) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(bookingReviews).set({published:published?1:0}).where(and(eq(bookingReviews.id,reviewId),eq(bookingReviews.tenantId,tenantId))); return (await db.select().from(bookingReviews).where(eq(bookingReviews.id,reviewId)).limit(1))[0]; }
+export async function updateTenantSettings(tenantId:number,input:{countryCode?:string;currency?:string;timezone?:string;defaultLanguage?:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(tenants).set(input).where(eq(tenants.id,tenantId)); return (await db.select().from(tenants).where(eq(tenants.id,tenantId)).limit(1))[0]; }
+export async function addStaff(tenantId:number,input:{name:string;role:string;photoUrl?:string;bio?:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(staff).values({tenantId,name:input.name,role:input.role,photoUrl:input.photoUrl||null,bio:input.bio||null}); return (await db.select().from(staff).where(eq(staff.id,Number(result[0].insertId))).limit(1))[0]; }
+export async function updateStaff(tenantId:number,staffId:number,input:{name?:string;role?:string;photoUrl?:string|null;bio?:string|null;active?:boolean}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(staff).set({...input,active:input.active===undefined?undefined:(input.active?1:0)}).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))); return (await db.select().from(staff).where(eq(staff.id,staffId)).limit(1))[0]; }
+export async function listStaffInvites(tenantId:number) { const db=await getDb(); return db ? db.select().from(staffInvites).where(eq(staffInvites.tenantId,tenantId)).orderBy(desc(staffInvites.createdAt)) : []; }
+export async function createStaffInvite(tenantId:number,createdByUserId:number,input:{email?:string;staffId?:number;role?:"staff"|"manager"}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const code=randomBytes(18).toString("hex"); const expiresAt=new Date(Date.now()+7*24*60*60*1000); const result=await db.insert(staffInvites).values({tenantId,createdByUserId,email:input.email||null,staffId:input.staffId||null,role:input.role||"staff",code,expiresAt}); return (await db.select().from(staffInvites).where(eq(staffInvites.id,Number(result[0].insertId))).limit(1))[0]; }
+export async function listStaffHours(tenantId:number,staffId:number) { const db=await getDb(); return db ? db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,tenantId),eq(staffWorkingHours.staffId,staffId))) : []; }
+export async function saveStaffHours(tenantId:number,staffId:number,weekday:number,openMinutes:number,closeMinutes:number,active:boolean) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const existing=await db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,tenantId),eq(staffWorkingHours.staffId,staffId),eq(staffWorkingHours.weekday,weekday))).limit(1); if(existing[0]) await db.update(staffWorkingHours).set({openMinutes,closeMinutes,active:active?1:0}).where(eq(staffWorkingHours.id,existing[0].id)); else await db.insert(staffWorkingHours).values({tenantId,staffId,weekday,openMinutes,closeMinutes,active:active?1:0}); return listStaffHours(tenantId,staffId); }
 export { bookings, clients, services, staff, tenants, tenantMembers };
