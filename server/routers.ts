@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { addStaff, addTenantClientNote, createBookingReview, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, userCanAccessTenant, userCanManageTenant } from "./db";
+import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, userCanAccessTenant, userCanManageTenant } from "./db";
 import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, sessionForUser } from "./localAuth";
 
 export const appRouter = router({
@@ -72,6 +72,11 @@ export const appRouter = router({
     bookings: protectedProcedure.input(z.object({ tenantId: z.number(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })).query(async ({ ctx, input }) => {
       if (!(await userCanAccessTenant(ctx.user, input.tenantId))) throw new TRPCError({ code: "FORBIDDEN", message: "لا تملك صلاحية الوصول إلى هذه الشركة" });
       return listDetailedBookings(input.tenantId, input.date);
+    }),
+    createBooking: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),clientName:z.string().trim().min(2).max(160),phone:z.string().trim().min(5).max(40),serviceId:z.number().int().positive(),staffId:z.number().int().positive(),date:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),startMinutes:z.number().int().min(0).max(1439),note:z.string().max(500).optional(),paid:z.boolean().optional()})).mutation(async ({ctx,input}) => {
+      if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية إنشاء الحجوزات في هذه الشركة"});
+      const {tenantId,...data}=input;
+      try { return await createDashboardBooking(tenantId,ctx.user.id,data); } catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر إنشاء الحجز"}); }
     }),
     updateBooking: protectedProcedure.input(z.object({tenantId:z.number(),bookingId:z.number(),status:z.enum(["new","confirmed","arrived","completed","cancelled","no_show"]).optional(),paid:z.boolean().optional(),note:z.string().max(500).optional(),durationMinutes:z.number().int().min(15).max(480).optional(),staffId:z.number().int().positive().optional(),startMinutes:z.number().int().min(0).max(1439).optional(),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()})).mutation(async ({ctx,input}) => {
       if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية الوصول إلى هذه الشركة"});
