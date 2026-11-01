@@ -11,8 +11,6 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
   let tenantId = 0;
   let staffId = 0;
   let serviceId = 0;
-  let clientIds: number[] = [];
-  let bookingIds: number[] = [];
 
   afterAll(async () => {
     const connection = await connectionPromise;
@@ -81,7 +79,6 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
 
-    if (fulfilled[0]?.status === "fulfilled") bookingIds.push(fulfilled[0].value.bookingId);
 
     const [rows] = await connection.execute<mysql.RowDataPacket[]>(
       "SELECT id FROM bookings WHERE tenantId = ? AND staffId = ? AND date = ? AND startMinutes = ? AND status <> 'cancelled'",
