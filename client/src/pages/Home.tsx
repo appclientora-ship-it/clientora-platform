@@ -109,8 +109,8 @@ export default function Home() {
   const selectedIsoDate = isoDate(displayDate,workspaceQuery.data?.timezone ?? "Asia/Muscat");
   const weekEndDate = (() => { const date = new Date(selectedIsoDate+"T12:00:00Z"); date.setUTCDate(date.getUTCDate()+6); return date.toISOString().slice(0,10); })();
   const bookingsQuery = trpc.workspace.bookings.useQuery({tenantId:tenantId ?? 0,date:selectedIsoDate,...(view === "week" ? {endDate:weekEndDate} : {})},{enabled:Boolean(tenantId)&&accessContextQuery.isSuccess&&accessContextQuery.data?.role!=="staff"});
-  const staffQuery = trpc.workspace.staff.useQuery({tenantId:tenantId ?? 0},{enabled:Boolean(tenantId)});
-  const servicesQuery = trpc.workspace.services.useQuery({tenantId:tenantId ?? 0},{enabled:Boolean(tenantId)});
+  const staffQuery = trpc.workspace.staff.useQuery({tenantId:tenantId ?? 0},{enabled:Boolean(tenantId)&&accessContextQuery.isSuccess&&accessContextQuery.data?.role!=="staff"});
+  const servicesQuery = trpc.workspace.services.useQuery({tenantId:tenantId ?? 0},{enabled:Boolean(tenantId)&&accessContextQuery.isSuccess&&accessContextQuery.data?.role!=="staff"});
   const createServiceMutation = trpc.workspace.createService.useMutation({onSuccess:()=>{servicesQuery.refetch();setNewServiceOpen(false);notify("تمت إضافة الخدمة وحفظها");},onError:error=>notify(error.message)});
   const updateServiceMutation = trpc.workspace.updateService.useMutation({onSuccess:()=>{servicesQuery.refetch();setEditEntity(null);notify("تم حفظ تعديلات الخدمة");},onError:error=>notify(error.message)});
   const addStaffMutation = trpc.workspace.addStaff.useMutation({onSuccess:()=>{staffQuery.refetch();setEditEntity(null);notify("تمت إضافة الموظف");},onError:error=>notify(error.message)});
