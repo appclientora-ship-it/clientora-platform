@@ -34,7 +34,8 @@ export const appRouter = router({
     }),
   }),
   workspace: router({
-    current: protectedProcedure.query(({ ctx }) => getTenantForUser(ctx.user)),\n    subscriptionQuote: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),months:z.union([z.literal(1),z.literal(3),z.literal(9),z.literal(12)])})).query(async ({ctx,input}) => {
+    current: protectedProcedure.query(({ ctx }) => getTenantForUser(ctx.user)),
+    subscriptionQuote: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),months:z.union([z.literal(1),z.literal(3),z.literal(9),z.literal(12)])})).query(async ({ctx,input}) => {
       if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية عرض اشتراك هذه الشركة"});
       const employeeCount = await countActiveTenantStaff(input.tenantId);
       try { return calculateSubscriptionQuote(employeeCount,input.months); }
