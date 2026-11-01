@@ -36,3 +36,14 @@
 .insight-card p{font-size:12px;line-height:1.7;color:#526b63;margin:5px 0}
 .insight-card small{display:block;font-size:11px;line-height:1.7;color:#087e72}
 @media(max-width:640px){.business-intelligence{padding:14px}.business-intelligence .section-heading{align-items:flex-start}.insight-list{grid-template-columns:1fr}}
+
+
+/* YCLIENTS-inspired booking source strip + first-visit marker */
+.booking-card{border-top:3px solid var(--booking-source-color,#1aa36f);padding-top:6px}
+.booking-card.source-dashboard{--booking-source-color:#20a36b}
+.booking-card.source-online{--booking-source-color:#7652c8}
+.booking-client{display:flex!important;align-items:center;gap:5px;min-width:0}
+.new-client-badge{display:inline-flex;align-items:center;justify-content:center;flex:none;padding:1px 5px;border-radius:4px;background:#16865b;color:#fff;font-size:8px;font-style:normal;font-weight:800;line-height:1.5;letter-spacing:.35px}
+.booking-card.source-online .new-client-badge{background:#7652c8}
+.booking-card.source-dashboard .booking-time{color:#16865b}
+.booking-card.source-online .booking-time{color:#7652c8}
