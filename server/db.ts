@@ -59,7 +59,7 @@ export async function listDetailedBookings(tenantId:number,date:string) {
   const rows = await db.select({booking:bookings, client:clients, service:services, staff}).from(bookings)
     .innerJoin(clients, eq(bookings.clientId, clients.id)).innerJoin(services, eq(bookings.serviceId, services.id)).innerJoin(staff, eq(bookings.staffId, staff.id))
     .where(and(eq(bookings.tenantId,tenantId),eq(bookings.date,date))).orderBy(bookings.startMinutes);
-  return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes || row.service.durationMinutes, price:row.booking.totalPrice || row.service.price, staffName:row.staff.name}));
+  return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes, price:row.booking.totalPrice ?? row.service.price, staffName:row.staff.name}));
 }
 export async function updateBookingForTenant(tenantId:number, bookingId:number, patch:{status?:"new"|"confirmed"|"arrived"|"completed"|"cancelled"|"no_show";paid?:boolean;note?:string;durationMinutes?:number;staffId?:number;startMinutes?:number;date?:string}, actorUserId:number) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
@@ -98,7 +98,7 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
   await db.update(bookings).set(set).where(and(eq(bookings.id,bookingId),eq(bookings.tenantId,tenantId)));
   const action = patch.status === "cancelled" ? "booking.cancelled" : patch.status === "completed" ? "booking.completed" : patch.paid ? "booking.paid" : "booking.updated";
   await db.insert(auditLogs).values({tenantId,actorUserId,action,entity:"booking",entityId:bookingId});
-  await db.insert(notifications).values({tenantId,recipientStaffId:booking.staffId,type:action,title:action === "booking.cancelled" ? "تم إلغاء حجز" : action === "booking.completed" ? "اكتملت الخدمة" : "تحديث على حجز",body:`تم تحديث حجز العميل رقم ${bookingId}.`,entity:"booking",entityId:bookingId});
+  await db.insert(notifications).values({tenantId,recipientStaffId:nextStaffId,type:action,title:action === "booking.cancelled" ? "تم إلغاء حجز" : action === "booking.completed" ? "اكتملت الخدمة" : "تحديث على حجز",body:`تم تحديث حجز العميل رقم ${bookingId}.`,entity:"booking",entityId:bookingId});
   return (await db.select().from(bookings).where(eq(bookings.id,bookingId)).limit(1))[0];
 }
 export async function listNotifications(tenantId:number) {
