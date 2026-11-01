@@ -97,6 +97,7 @@ export default function Home() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [ownerMenuOpen, setOwnerMenuOpen] = useState(false);
   const [language,setLanguage] = useState<Language>(() => (typeof window !== "undefined" && (localStorage.getItem("clientora-language") as Language)) || "ar");
+  const [country,setCountry] = useState(() => (typeof window !== "undefined" && localStorage.getItem("clientora-country")) || "OM");
   const today = useMemo(() => new Date(), []);
   const displayDate = useMemo(() => { const date = new Date(today); date.setDate(date.getDate() + dateOffset); return date; }, [today,dateOffset]);
   const workspaceQuery = trpc.workspace.current.useQuery();
