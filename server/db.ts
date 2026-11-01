@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffInvites, staffTimeOff, staffWorkingHours, tenants, tenantMembers, users } from "../drizzle/schema";
+import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, tenants, tenantMembers, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { buildBookingDemand } from './bookingDemand';
 
@@ -198,6 +198,11 @@ export function isValidBookingDate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+export function hasStaffBreakConflict(breaks: Array<{startMinutes:number;endMinutes:number}>, candidate: {startMinutes:number;durationMinutes:number}): boolean {
+  const end = candidate.startMinutes + candidate.durationMinutes;
+  return breaks.some(item => Number.isInteger(item.startMinutes) && Number.isInteger(item.endMinutes) && item.startMinutes >= 0 && item.endMinutes <= 1440 && item.endMinutes > item.startMinutes && candidate.startMinutes < item.endMinutes && item.startMinutes < end);
+}
+
 export function hasBookingConflict(
   existing: Array<{id:number;startMinutes:number;durationMinutes:number;status:string}>,
   candidate: {startMinutes:number;durationMinutes:number},
@@ -353,12 +358,13 @@ export function buildAvailableBookingSlots(input: {
   durationMinutes: number;
   existingBookings: Array<{ id: number; startMinutes: number; durationMinutes: number; status: string }>;
   isFuture: (startMinutes: number) => boolean;
+  breaks?: Array<{startMinutes:number;endMinutes:number}>;
 }): number[] {
   const slots: number[] = [];
   if (input.durationMinutes < 1 || input.openMinutes < 0 || input.closeMinutes > 1440 || input.closeMinutes <= input.openMinutes) return slots;
   const firstSlot = Math.ceil(input.openMinutes / 30) * 30;
   for (let start = firstSlot; start + input.durationMinutes <= input.closeMinutes; start += 30) {
-    if (input.isFuture(start) && !hasBookingConflict(input.existingBookings, { startMinutes: start, durationMinutes: input.durationMinutes })) {
+    if (input.isFuture(start) && !hasBookingConflict(input.existingBookings, { startMinutes: start, durationMinutes: input.durationMinutes }) && !hasStaffBreakConflict(input.breaks ?? [], { startMinutes: start, durationMinutes: input.durationMinutes })) {
       slots.push(start);
     }
   }
@@ -383,6 +389,8 @@ export async function getPublicBookingSlots(input: { slug: string; staffId: numb
     db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId, tenant.id), eq(staffWorkingHours.staffId, input.staffId), eq(staffWorkingHours.weekday, weekday), eq(staffWorkingHours.active, 1))),
     db.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date))),
     db.select().from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenant.id),eq(staffTimeOff.staffId,input.staffId),eq(staffTimeOff.date,input.date))),
+ ,
+    db.select({startMinutes:staffBreaks.startMinutes,endMinutes:staffBreaks.endMinutes}).from(staffBreaks).where(and(eq(staffBreaks.tenantId,tenant.id),eq(staffBreaks.staffId,input.staffId),eq(staffBreaks.weekday,weekday),eq(staffBreaks.active,1))),
   ]);
   const hours = hoursRows[0];
   if (!hours || timeOffRows.length) return [];
@@ -392,6 +400,7 @@ export async function getPublicBookingSlots(input: { slug: string; staffId: numb
     closeMinutes: hours.closeMinutes,
     durationMinutes,
     existingBookings,
+    breaks: breaksRows,
     isFuture: startMinutes => isLocalBookingIntervalValid(input.date, startMinutes, durationMinutes, tenant.timezone || "Asia/Muscat") && isBookingStartInFuture(input.date, startMinutes, tenant.timezone || "Asia/Muscat"),
   });
 }
