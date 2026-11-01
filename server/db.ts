@@ -1,7 +1,7 @@
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffInvites, staffTimeOff, staffWorkingHours, tenants, tenantMembers, users } from "../drizzle/schema";
+import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { buildBookingDemand } from './bookingDemand';
 
@@ -28,6 +28,55 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   if (!Object.keys(updateSet).length) updateSet.lastSignedIn = new Date();
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
+
+export async function createTelegramLinkCode(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const code = randomBytes(24).toString("base64url");
+  const tokenHash = createHash("sha256").update(code).digest("hex");
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
+  await db.transaction(async (tx) => {
+    await tx.update(telegramLinkTokens).set({ usedAt: now })
+      .where(and(eq(telegramLinkTokens.userId, userId), isNull(telegramLinkTokens.usedAt)));
+    await tx.insert(telegramLinkTokens).values({ userId, tokenHash, expiresAt });
+  });
+  return { code, expiresAt };
+}
+
+
+export async function consumeTelegramLinkCode(code: string, telegramUserId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const tokenHash = createHash("sha256").update(code).digest("hex");
+  const now = new Date();
+  return db.transaction(async (tx) => {
+    const tokenRows = await tx.select().from(telegramLinkTokens)
+      .where(and(eq(telegramLinkTokens.tokenHash, tokenHash), gte(telegramLinkTokens.expiresAt, now)))
+      .limit(1);
+    const token = tokenRows[0];
+    if (!token || token.usedAt) return { success: false as const };
+    const existing = await tx.select().from(telegramLinks)
+      .where(eq(telegramLinks.telegramUserId, telegramUserId)).limit(1);
+    if (existing[0] && existing[0].revokedAt === null) return { success: false as const };
+    const consumed = await tx.update(telegramLinkTokens).set({ usedAt: now })
+      .where(and(
+        eq(telegramLinkTokens.id, token.id),
+        eq(telegramLinkTokens.tokenHash, tokenHash),
+        isNull(telegramLinkTokens.usedAt),
+        gte(telegramLinkTokens.expiresAt, now),
+      ));
+    if (consumed[0].affectedRows !== 1) return { success: false as const };
+    if (existing[0]) {
+      await tx.update(telegramLinks).set({ userId: token.userId, linkedAt: now, revokedAt: null })
+        .where(eq(telegramLinks.id, existing[0].id));
+    } else {
+      await tx.insert(telegramLinks).values({ userId: token.userId, telegramUserId, linkedAt: now });
+    }
+    return { success: true as const };
+  });
+}
+
 export async function getUserByOpenId(openId: string) {
   const db = await getDb(); if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
@@ -198,6 +247,11 @@ export function isValidBookingDate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+export function hasStaffBreakConflict(breaks: Array<{startMinutes:number;endMinutes:number}>, candidate: {startMinutes:number;durationMinutes:number}): boolean {
+  const end = candidate.startMinutes + candidate.durationMinutes;
+  return breaks.some(item => Number.isInteger(item.startMinutes) && Number.isInteger(item.endMinutes) && item.startMinutes >= 0 && item.endMinutes <= 1440 && item.endMinutes > item.startMinutes && candidate.startMinutes < item.endMinutes && item.startMinutes < end);
+}
+
 export function hasBookingConflict(
   existing: Array<{id:number;startMinutes:number;durationMinutes:number;status:string}>,
   candidate: {startMinutes:number;durationMinutes:number},
@@ -249,6 +303,18 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
     ));
     if (!isWithinStaffWorkingHours(weekday, nextStart, nextDuration, workingHours)) {
       throw new Error("الموعد الجديد خارج ساعات عمل الموظف، اختر وقتاً ضمن ساعات العمل");
+    }
+    const breaks = await tx.select({
+      startMinutes: staffBreaks.startMinutes,
+      endMinutes: staffBreaks.endMinutes,
+    }).from(staffBreaks).where(and(
+      eq(staffBreaks.tenantId, tenantId),
+      eq(staffBreaks.staffId, nextStaffId),
+      eq(staffBreaks.weekday, weekday),
+      eq(staffBreaks.active, 1),
+    ));
+    if (hasStaffBreakConflict(breaks, { startMinutes: nextStart, durationMinutes: nextDuration })) {
+      throw new Error("الموعد الجديد يتعارض مع فترة استراحة الموظف");
     }
 
     const sameDay = await tx.select().from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,nextStaffId),eq(bookings.date,nextDate)));
@@ -348,14 +414,45 @@ export async function userCanManageTenant(user: User, tenantId: number) {
 }
 export async function getPublicBookingCatalog(slug: string) {
   const db = await getDb(); if (!db) return undefined;
-  const tenantRows = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
-  const tenant = tenantRows[0]; if (!tenant || !isTenantPublicBookingEnabled(tenant.status)) return undefined;
+  const tenant = (await db.select({
+    id: tenants.id,
+    name: tenants.name,
+    slug: tenants.slug,
+    city: tenants.city,
+    currency: tenants.currency,
+    timezone: tenants.timezone,
+    status: tenants.status,
+  }).from(tenants).where(eq(tenants.slug, slug)).limit(1))[0];
+  if (!tenant || !isTenantPublicBookingEnabled(tenant.status)) return undefined;
   const [serviceRows, staffRows, reviewRows] = await Promise.all([
-    db.select().from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1))),
-    db.select().from(staff).where(and(eq(staff.tenantId, tenant.id), eq(staff.active, 1))),
-    db.select().from(bookingReviews).where(and(eq(bookingReviews.tenantId, tenant.id), eq(bookingReviews.published, 1))).orderBy(desc(bookingReviews.createdAt)),
+    db.select({
+      id: services.id,
+      name: services.name,
+      category: services.category,
+      durationMinutes: services.durationMinutes,
+      price: services.price,
+    }).from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1))),
+    db.select({
+      id: staff.id,
+      name: staff.name,
+      role: staff.role,
+      color: staff.color,
+      photoUrl: staff.photoUrl,
+      bio: staff.bio,
+    }).from(staff).where(and(eq(staff.tenantId, tenant.id), eq(staff.active, 1))),
+    db.select({
+      id: bookingReviews.id,
+      staffId: bookingReviews.staffId,
+      rating: bookingReviews.rating,
+      comment: bookingReviews.comment,
+      createdAt: bookingReviews.createdAt,
+    }).from(bookingReviews).where(and(eq(bookingReviews.tenantId, tenant.id), eq(bookingReviews.published, 1))).orderBy(desc(bookingReviews.createdAt)),
   ]);
-  const staffWithRatings = staffRows.map(person => { const mine=reviewRows.filter(review=>review.staffId===person.id); const rating=mine.length ? mine.reduce((sum,item)=>sum+item.rating,0)/mine.length : 0; return {...person,rating,reviewCount:mine.length}; });
+  const staffWithRatings = staffRows.map(person => {
+    const mine = reviewRows.filter(review => review.staffId === person.id);
+    const rating = mine.length ? mine.reduce((sum, item) => sum + item.rating, 0) / mine.length : 0;
+    return { ...person, rating, reviewCount: mine.length };
+  });
   return { tenant, services: serviceRows, staff: staffWithRatings, reviews: reviewRows };
 }
 export function isWithinStaffWorkingHours(
@@ -379,12 +476,13 @@ export function buildAvailableBookingSlots(input: {
   durationMinutes: number;
   existingBookings: Array<{ id: number; startMinutes: number; durationMinutes: number; status: string }>;
   isFuture: (startMinutes: number) => boolean;
+  breaks?: Array<{startMinutes:number;endMinutes:number}>;
 }): number[] {
   const slots: number[] = [];
   if (input.durationMinutes < 1 || input.openMinutes < 0 || input.closeMinutes > 1440 || input.closeMinutes <= input.openMinutes) return slots;
   const firstSlot = Math.ceil(input.openMinutes / 30) * 30;
   for (let start = firstSlot; start + input.durationMinutes <= input.closeMinutes; start += 30) {
-    if (input.isFuture(start) && !hasBookingConflict(input.existingBookings, { startMinutes: start, durationMinutes: input.durationMinutes })) {
+    if (input.isFuture(start) && !hasBookingConflict(input.existingBookings, { startMinutes: start, durationMinutes: input.durationMinutes }) && !hasStaffBreakConflict(input.breaks ?? [], { startMinutes: start, durationMinutes: input.durationMinutes })) {
       slots.push(start);
     }
   }
@@ -405,10 +503,11 @@ export async function getPublicBookingSlots(input: { slug: string; staffId: numb
   const durationMinutes = selectedServices.reduce((sum, item) => sum + item.durationMinutes, 0);
   if (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > 480) return [];
   const weekday = new Date(input.date + "T00:00:00Z").getUTCDay();
-  const [hoursRows, existingBookings, timeOffRows] = await Promise.all([
+  const [hoursRows, existingBookings, timeOffRows, breaksRows] = await Promise.all([
     db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId, tenant.id), eq(staffWorkingHours.staffId, input.staffId), eq(staffWorkingHours.weekday, weekday), eq(staffWorkingHours.active, 1))),
     db.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date))),
     db.select().from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenant.id),eq(staffTimeOff.staffId,input.staffId),eq(staffTimeOff.date,input.date))),
+    db.select({startMinutes:staffBreaks.startMinutes,endMinutes:staffBreaks.endMinutes}).from(staffBreaks).where(and(eq(staffBreaks.tenantId,tenant.id),eq(staffBreaks.staffId,input.staffId),eq(staffBreaks.weekday,weekday),eq(staffBreaks.active,1))),
   ]);
   const hours = hoursRows[0];
   if (!hours || timeOffRows.length) return [];
@@ -418,6 +517,7 @@ export async function getPublicBookingSlots(input: { slug: string; staffId: numb
     closeMinutes: hours.closeMinutes,
     durationMinutes,
     existingBookings,
+    breaks: breaksRows,
     isFuture: startMinutes => isLocalBookingIntervalValid(input.date, startMinutes, durationMinutes, tenant.timezone || "Asia/Muscat") && isBookingStartInFuture(input.date, startMinutes, tenant.timezone || "Asia/Muscat"),
   });
 }
@@ -426,7 +526,7 @@ export async function getPublicBookingSlotsByStaff(input: { slug: string; servic
   const catalog = await getPublicBookingCatalog(input.slug);
   if (!catalog || !input.serviceIds.length) return [];
   return Promise.all(catalog.staff.map(async member => ({
-    id: member.id, name: member.name, role: member.role, color: member.color,
+    id: member.id, name: member.name, role: member.role, bio: member.bio, color: member.color,
     photoUrl: member.photoUrl, rating: member.rating, reviewCount: member.reviewCount,
     slots: await getPublicBookingSlots({ slug: input.slug, staffId: member.id, serviceIds: input.serviceIds, date: input.date }),
   })));
@@ -444,17 +544,18 @@ export async function getSmartScheduleSuggestions(input:{tenantId:number;service
   const weekday=new Date(input.date+"T00:00:00.000Z").getUTCDay();
   const team=await db.select().from(staff).where(and(eq(staff.tenantId,input.tenantId),eq(staff.active,1)));
   const suggestions=await Promise.all(team.map(async member=>{
-    const [hoursRows,bookingsForDay,timeOff]=await Promise.all([
+    const [hoursRows,bookingsForDay,timeOff,breaksRows]=await Promise.all([
       db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,input.tenantId),eq(staffWorkingHours.staffId,member.id),eq(staffWorkingHours.weekday,weekday),eq(staffWorkingHours.active,1))),
       db.select().from(bookings).where(and(eq(bookings.tenantId,input.tenantId),eq(bookings.staffId,member.id),eq(bookings.date,input.date))),
       db.select({id:staffTimeOff.id}).from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,input.tenantId),eq(staffTimeOff.staffId,member.id),eq(staffTimeOff.date,input.date))),
+      db.select({startMinutes:staffBreaks.startMinutes,endMinutes:staffBreaks.endMinutes}).from(staffBreaks).where(and(eq(staffBreaks.tenantId,input.tenantId),eq(staffBreaks.staffId,member.id),eq(staffBreaks.weekday,weekday),eq(staffBreaks.active,1))),
     ]);
     const hours=hoursRows[0];
     if(!hours||timeOff.length) return null;
     const activeBookings=bookingsForDay.filter(item=>item.status!=="cancelled");
     const slots=buildAvailableBookingSlots({
       weekday,openMinutes:hours.openMinutes,closeMinutes:hours.closeMinutes,
-      durationMinutes:service.durationMinutes,existingBookings:bookingsForDay,
+      durationMinutes:service.durationMinutes,existingBookings:bookingsForDay,breaks:breaksRows,
       isFuture:start=>isLocalBookingIntervalValid(input.date,start,service.durationMinutes,tenant.timezone||"Asia/Muscat")&&isBookingStartInFuture(input.date,start,tenant.timezone||"Asia/Muscat"),
     });
     if(!slots.length) return null;
@@ -503,6 +604,8 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   const staffHours = await tx.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId, tenant.id), eq(staffWorkingHours.staffId, input.staffId), eq(staffWorkingHours.weekday, weekday), eq(staffWorkingHours.active, 1))).limit(1);
   if (!isWithinStaffWorkingHours(weekday, input.startMinutes, totalDuration, staffHours)) throw new Error("الموعد خارج ساعات عمل الموظف");
   const existing = await tx.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date)));
+  const breakRows = await tx.select({startMinutes:staffBreaks.startMinutes,endMinutes:staffBreaks.endMinutes}).from(staffBreaks).where(and(eq(staffBreaks.tenantId,tenant.id),eq(staffBreaks.staffId,input.staffId),eq(staffBreaks.weekday,weekday),eq(staffBreaks.active,1)));
+  if (hasStaffBreakConflict(breakRows,{startMinutes:input.startMinutes,durationMinutes:totalDuration})) throw new Error("الموعد يتعارض مع فترة استراحة الموظف، اختر وقتاً آخر");
   const overlaps = hasBookingConflict(existing, {startMinutes:input.startMinutes, durationMinutes:totalDuration});
   if (overlaps) throw new Error("هذا الوقت محجوز بالفعل، اختر وقتاً آخر");
   const clientRows = await tx.select().from(clients).where(and(eq(clients.tenantId, tenant.id), eq(clients.phone, input.phone))).limit(1);
@@ -543,6 +646,8 @@ export async function createDashboardBooking(tenantId:number, actorUserId:number
     const hours=await tx.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,tenantId),eq(staffWorkingHours.staffId,input.staffId),eq(staffWorkingHours.weekday,weekday),eq(staffWorkingHours.active,1)));
     if(!isWithinStaffWorkingHours(weekday,input.startMinutes,duration,hours)) throw new Error("الموعد خارج ساعات عمل الموظف");
     const sameDay=await tx.select().from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,input.staffId),eq(bookings.date,input.date)));
+    const breaks=await tx.select({startMinutes:staffBreaks.startMinutes,endMinutes:staffBreaks.endMinutes}).from(staffBreaks).where(and(eq(staffBreaks.tenantId,tenantId),eq(staffBreaks.staffId,input.staffId),eq(staffBreaks.weekday,weekday),eq(staffBreaks.active,1)));
+    if(hasStaffBreakConflict(breaks,{startMinutes:input.startMinutes,durationMinutes:duration})) throw new Error("الموعد يتعارض مع فترة استراحة الموظف");
     if(hasBookingConflict(sameDay,{startMinutes:input.startMinutes,durationMinutes:duration})) throw new Error("هذا الموعد متعارض مع حجز آخر");
     const existingClient=(await tx.select().from(clients).where(and(eq(clients.tenantId,tenantId),eq(clients.phone,phone))).limit(1))[0];
     let clientId=existingClient?.id;
@@ -567,8 +672,8 @@ export async function createBookingReview(input:{tenantId:number;bookingId:numbe
   const client=(await db.select().from(clients).where(and(eq(clients.id,booking.clientId),eq(clients.tenantId,input.tenantId))).limit(1))[0];
   if(!client || client.phone !== input.phone) throw new Error("رقم الهاتف لا يطابق بيانات الحجز");
   const existing=(await db.select().from(bookingReviews).where(eq(bookingReviews.bookingId,input.bookingId)).limit(1))[0]; if(existing) throw new Error("تم تقييم هذا الحجز من قبل");
-  const result=await db.insert(bookingReviews).values({tenantId:input.tenantId,bookingId:booking.id,clientId:booking.clientId,staffId:booking.staffId,rating:input.rating,comment:input.comment||null,published:0});
-  return (await db.select().from(bookingReviews).where(eq(bookingReviews.id,Number(result[0].insertId))).limit(1))[0];
+  await db.insert(bookingReviews).values({tenantId:input.tenantId,bookingId:booking.id,clientId:booking.clientId,staffId:booking.staffId,rating:input.rating,comment:input.comment||null,published:0});
+  return { success: true };
 }
 export async function listBookingReviews(tenantId:number) { const db=await getDb(); return db ? db.select().from(bookingReviews).where(eq(bookingReviews.tenantId,tenantId)).orderBy(desc(bookingReviews.createdAt)) : []; }
 export async function publishBookingReview(tenantId:number,reviewId:number,published:boolean) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(bookingReviews).set({published:published?1:0}).where(and(eq(bookingReviews.id,reviewId),eq(bookingReviews.tenantId,tenantId))); return (await db.select().from(bookingReviews).where(eq(bookingReviews.id,reviewId)).limit(1))[0]; }
@@ -578,7 +683,7 @@ export async function createTenantService(tenantId:number,input:{name:string;cat
 export async function updateTenantService(tenantId:number,serviceId:number,input:{name?:string;category?:string;durationMinutes?:number;price?:number;active?:boolean}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); if(input.name!==undefined&&!input.name.trim()) throw new Error("اسم الخدمة لا يمكن أن يكون فارغاً"); if(input.durationMinutes!==undefined&&(!Number.isInteger(input.durationMinutes)||input.durationMinutes<5||input.durationMinutes>480)) throw new Error("مدة الخدمة يجب أن تكون بين 5 و480 دقيقة"); if(input.price!==undefined&&(!Number.isInteger(input.price)||input.price<0)) throw new Error("سعر الخدمة غير صحيح"); const existing=(await db.select({id:services.id}).from(services).where(and(eq(services.id,serviceId),eq(services.tenantId,tenantId))).limit(1))[0]; if(!existing) throw new Error("الخدمة غير موجودة في هذه الشركة"); const {active,...fields}=input; await db.update(services).set({...fields,name:fields.name?.trim(),category:fields.category?.trim(),active:active===undefined?undefined:(active?1:0)}).where(and(eq(services.id,serviceId),eq(services.tenantId,tenantId))); return (await db.select().from(services).where(and(eq(services.id,serviceId),eq(services.tenantId,tenantId))).limit(1))[0]; }
 export async function listTenantStaff(tenantId:number) { const db=await getDb(); return db ? db.select().from(staff).where(and(eq(staff.tenantId,tenantId),eq(staff.active,1))).orderBy(staff.id) : []; }
 export async function addStaff(tenantId:number,input:{name:string;role:string;photoUrl?:string;bio?:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(staff).values({tenantId,name:input.name,role:input.role,photoUrl:input.photoUrl||null,bio:input.bio||null}); return (await db.select().from(staff).where(eq(staff.id,Number(result[0].insertId))).limit(1))[0]; }
-export async function updateStaff(tenantId:number,staffId:number,input:{name?:string;role?:string;photoUrl?:string|null;bio?:string|null;active?:boolean}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(staff).set({...input,active:input.active===undefined?undefined:(input.active?1:0)}).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))); return (await db.select().from(staff).where(eq(staff.id,staffId)).limit(1))[0]; }
+export async function updateStaff(tenantId:number,staffId:number,input:{name?:string;role?:string;photoUrl?:string|null;bio?:string|null;active?:boolean}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(staff).set({...input,active:input.active===undefined?undefined:(input.active?1:0)}).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))); return (await db.select().from(staff).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))).limit(1))[0]; }
 export async function listStaffInvites(tenantId:number) { const db=await getDb(); return db ? db.select().from(staffInvites).where(eq(staffInvites.tenantId,tenantId)).orderBy(desc(staffInvites.createdAt)) : []; }
 export async function createStaffInvite(tenantId:number,createdByUserId:number,input:{email?:string;staffId?:number;role?:"staff"|"manager"}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const code=randomBytes(18).toString("hex"); const expiresAt=new Date(Date.now()+7*24*60*60*1000); const result=await db.insert(staffInvites).values({tenantId,createdByUserId,email:input.email||null,staffId:input.staffId||null,role:input.role||"staff",code,expiresAt}); return (await db.select().from(staffInvites).where(eq(staffInvites.id,Number(result[0].insertId))).limit(1))[0]; }
 export async function listStaffTimeOff(tenantId:number,staffId:number) { const db=await getDb(); return db ? db.select().from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenantId),eq(staffTimeOff.staffId,staffId))).orderBy(staffTimeOff.date) : []; }
