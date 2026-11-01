@@ -17,14 +17,14 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
     const connection = await connectionPromise;
     for (const cleanupTenantId of createdTenantIds) {
       await connection.execute("DELETE FROM notifications WHERE tenantId = ?", [cleanupTenantId]);
-      await connection.execute("DELETE FROM auditLogs WHERE tenantId = ?", [tenantId]);
+      await connection.execute("DELETE FROM auditLogs WHERE tenantId = ?", [cleanupTenantId]);
       await connection.execute("DELETE FROM bookingItems WHERE tenantId = ?", [cleanupTenantId]);
       await connection.execute("DELETE FROM bookings WHERE tenantId = ?", [cleanupTenantId]);
       await connection.execute("DELETE FROM clients WHERE tenantId = ?", [cleanupTenantId]);
       await connection.execute("DELETE FROM staffWorkingHours WHERE tenantId = ?", [cleanupTenantId]);
       await connection.execute("DELETE FROM services WHERE tenantId = ?", [cleanupTenantId]);
       await connection.execute("DELETE FROM staff WHERE tenantId = ?", [cleanupTenantId]);
-      await connection.execute("DELETE FROM tenants WHERE id = ?", [tenantId]);
+      await connection.execute("DELETE FROM tenants WHERE id = ?", [cleanupTenantId]);
     }
     await connection.end();
   });
