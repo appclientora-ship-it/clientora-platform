@@ -3,7 +3,7 @@ import { bookingDateSchema } from "./validation";
 import { TRPCError } from "@trpc/server";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, getTenantAccessContext, listEmployeeBookings, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, userCanManageTenant } from "./db";
+import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, createTelegramLinkCode, getTenantAccessContext, listEmployeeBookings, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, userCanManageTenant } from "./db";
 import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, sessionForUser } from "./localAuth";
 
 export const appRouter = router({
@@ -34,6 +34,7 @@ export const appRouter = router({
   }),
   workspace: router({
     current: protectedProcedure.query(({ ctx }) => getTenantForUser(ctx.user)),
+    createTelegramLinkCode: protectedProcedure.mutation(({ ctx }) => createTelegramLinkCode(ctx.user.id)),
     accessContext: protectedProcedure.query(({ctx}) => getTenantAccessContext(ctx.user)),
     employeeBookings: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),endDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()}).refine(value=>!value.endDate||value.endDate>=value.date,{message:"نهاية الفترة يجب ألا تسبق بدايتها"}).refine(value=>!value.endDate||(Date.parse(value.endDate+"T00:00:00Z")-Date.parse(value.date+"T00:00:00Z"))<=6*86400000,{message:"الفترة القصوى سبعة أيام"})).query(async ({ctx,input}) => {
       const access = await getTenantAccessContext(ctx.user);
