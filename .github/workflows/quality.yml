@@ -51,6 +51,9 @@ jobs:
       - name: Prepare disposable MySQL schema
         run: pnpm exec drizzle-kit push --force
 
+      - name: Verify operations migration against MySQL
+        run: node scripts/test-operations-migration.mjs
+
       - name: Type check
         run: pnpm check
 
