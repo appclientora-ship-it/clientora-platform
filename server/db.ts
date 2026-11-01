@@ -338,16 +338,46 @@ export async function userCanManageTenant(user: User, tenantId: number) {
 }
 export async function getPublicBookingCatalog(slug: string) {
   const db = await getDb(); if (!db) return undefined;
-  const tenantRows = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
-  const tenant = tenantRows[0]; if (!tenant || !isTenantPublicBookingEnabled(tenant.status)) return undefined;
+  const tenant = (await db.select({
+    id: tenants.id,
+    name: tenants.name,
+    slug: tenants.slug,
+    city: tenants.city,
+    currency: tenants.currency,
+    timezone: tenants.timezone,
+    status: tenants.status,
+  }).from(tenants).where(eq(tenants.slug, slug)).limit(1))[0];
+  if (!tenant || !isTenantPublicBookingEnabled(tenant.status)) return undefined;
   const [serviceRows, staffRows, reviewRows] = await Promise.all([
-    db.select().from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1))),
-    db.select().from(staff).where(and(eq(staff.tenantId, tenant.id), eq(staff.active, 1))),
-    db.select().from(bookingReviews).where(and(eq(bookingReviews.tenantId, tenant.id), eq(bookingReviews.published, 1))).orderBy(desc(bookingReviews.createdAt)),
+    db.select({
+      id: services.id,
+      name: services.name,
+      category: services.category,
+      durationMinutes: services.durationMinutes,
+      price: services.price,
+    }).from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1))),
+    db.select({
+      id: staff.id,
+      name: staff.name,
+      role: staff.role,
+      color: staff.color,
+      photoUrl: staff.photoUrl,
+      bio: staff.bio,
+    }).from(staff).where(and(eq(staff.tenantId, tenant.id), eq(staff.active, 1))),
+    db.select({
+      id: bookingReviews.id,
+      staffId: bookingReviews.staffId,
+      rating: bookingReviews.rating,
+      comment: bookingReviews.comment,
+      createdAt: bookingReviews.createdAt,
+    }).from(bookingReviews).where(and(eq(bookingReviews.tenantId, tenant.id), eq(bookingReviews.published, 1))).orderBy(desc(bookingReviews.createdAt)),
   ]);
-  const staffWithRatings = staffRows.map(person => { const mine=reviewRows.filter(review=>review.staffId===person.id); const rating=mine.length ? mine.reduce((sum,item)=>sum+item.rating,0)/mine.length : 0; return {...person,rating,reviewCount:mine.length}; });
-  const publicReviews = reviewRows.map(({ id, staffId, rating, comment, createdAt }) => ({ id, staffId, rating, comment, createdAt }));
-  return { tenant, services: serviceRows, staff: staffWithRatings, reviews: publicReviews };
+  const staffWithRatings = staffRows.map(person => {
+    const mine = reviewRows.filter(review => review.staffId === person.id);
+    const rating = mine.length ? mine.reduce((sum, item) => sum + item.rating, 0) / mine.length : 0;
+    return { ...person, rating, reviewCount: mine.length };
+  });
+  return { tenant, services: serviceRows, staff: staffWithRatings, reviews: reviewRows };
 }
 export function isWithinStaffWorkingHours(
   weekday: number,
