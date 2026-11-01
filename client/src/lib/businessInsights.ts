@@ -19,7 +19,10 @@ export function buildBusinessInsights(input: BusinessInsightInput) {
   const noShowCount = input.employees.reduce((sum, employee) => sum + employee.noShow, 0);
   const unpaid = Math.max(0, input.revenue - input.paidRevenue);
   const net = input.revenue - input.expenseTotal;
-  const noShowRate = input.bookings > 0 ? noShowCount / input.bookings : 0;
+  // Canceled appointments are not eligible to become no-shows, so exclude them
+  // from the no-show denominator. Keep cancellation rate based on all bookings.
+  const eligibleBookings = Math.max(0, input.bookings - input.cancelled);
+  const noShowRate = eligibleBookings > 0 ? noShowCount / eligibleBookings : 0;
   const cancellationRate = input.bookings > 0 ? input.cancelled / input.bookings : 0;
   const topEmployee = [...input.employees].sort((a, b) => b.revenue - a.revenue)[0];
   const recommendations: BusinessInsight[] = [];
@@ -41,7 +44,7 @@ export function buildBusinessInsights(input: BusinessInsightInput) {
     if (noShowRate >= 0.1) recommendations.push({
       priority: noShowRate >= 0.2 ? "high" : "medium",
       title: "معدل عدم الحضور يحتاج متابعة",
-      detail: `${noShowCount} من ${input.bookings} حجزاً مسجلاً انتهى كعدم حضور (${Math.round(noShowRate * 100)}%).`,
+      detail: `${noShowCount} من ${eligibleBookings} حجزاً غير ملغى انتهى كعدم حضور (${Math.round(noShowRate * 100)}%).`,
       action: "اختبر تأكيد الحجز قبل الموعد وقائمة انتظار لملء الفترات التي تُلغى.",
     });
     if (cancellationRate >= 0.15) recommendations.push({
