@@ -30,6 +30,6 @@ describe("public booking idempotency key validation", () => {
 
   it("trims surrounding whitespace from a valid idempotency key", async () => {
     await expect(createPublicBooking({ ...validInput, idempotencyKey: "  valid-key  " }))
-      .rejects.toThrow("Database is not available");
+      .rejects.toThrow("Company not found");
   });
 });
