@@ -55,9 +55,14 @@ export async function consumeTelegramLinkCode(code: string, telegramUserId: stri
       .where(and(eq(telegramLinkTokens.tokenHash, tokenHash), gte(telegramLinkTokens.expiresAt, now)))
       .limit(1);
     const token = tokenRows[0];
-    if (!token || token.usedAt) return { success: false as const };
+    if (!token) return { success: false as const };
     const existing = await tx.select().from(telegramLinks)
       .where(eq(telegramLinks.telegramUserId, telegramUserId)).limit(1);
+    // Telegram may retry after the link was committed but before its reply was delivered.
+    // Treat that exact already-linked account as success so the retry is safe.
+    if (token.usedAt) {
+      return { success: Boolean(existing[0] && existing[0].userId === token.userId && existing[0].revokedAt === null) };
+    }
     if (existing[0] && existing[0].revokedAt === null) return { success: false as const };
     const consumed = await tx.update(telegramLinkTokens).set({ usedAt: now })
       .where(and(
