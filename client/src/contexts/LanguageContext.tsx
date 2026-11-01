@@ -223,6 +223,9 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "حفظ المصروف":"Save expense",
     "مثال: شراء منتجات شعر":"Example: Purchase hair products",
     "اسم المورد (اختياري)":"Supplier name (optional)"
+    "ر.ع":"OMR",
+    "إلغاء الحجز":"Cancel booking",
+    "تعديل حالة الحجز":"Change booking status",
   },
   ru: {
     "منصة إدارة الحجوزات":"Платформа управления бронированием","مساحة تشغيل آمنة":"Защищённое рабочее пространство",
@@ -445,6 +448,9 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "حفظ المصروف":"Сохранить расход",
     "مثال: شراء منتجات شعر":"Например: покупка средств для волос",
     "اسم المورد (اختياري)":"Название поставщика (необязательно)"
+    "ر.ع":"OMR",
+    "إلغاء الحجز":"Отменить бронирование",
+    "تعديل حالة الحجز":"Изменить статус бронирования",
   }
 };
 type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
