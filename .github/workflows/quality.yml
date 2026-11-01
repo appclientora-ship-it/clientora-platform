@@ -49,8 +49,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Prepare disposable MySQL schema
-        run: pnpm exec drizzle-kit push --force
+      - name: Apply committed database migrations to disposable MySQL
+        run: pnpm db:migrate
 
       - name: Type check
         run: pnpm check
