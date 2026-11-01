@@ -103,6 +103,7 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
     );
     const previousTenantId = tenantId;
     tenantId = tenantResult.insertId;
+    createdTenantIds.push(tenantId);
     const [staffResult] = await connection.execute<mysql.ResultSetHeader>(
       "INSERT INTO staff (tenantId, name, role, active) VALUES (?, 'Test Stylist', 'Stylist', 1)", [tenantId],
     );
