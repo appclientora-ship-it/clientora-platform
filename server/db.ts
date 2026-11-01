@@ -75,6 +75,7 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
   if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(nextDate) || Number.isNaN(parsedNextDate.getTime()) || parsedNextDate.toISOString().slice(0,10) !== nextDate) throw new Error("تاريخ الحجز غير صحيح");
   if (!Number.isInteger(nextStart) || nextStart < 0 || nextStart > 1439) throw new Error("وقت بداية الحجز غير صحيح");
   if (!Number.isInteger(nextDuration) || nextDuration < 15 || nextDuration > 480) throw new Error("مدة الحجز يجب أن تكون بين 15 و480 دقيقة");
+  if (nextStart + nextDuration > 1440) throw new Error("وقت نهاية الحجز يتجاوز نهاية اليوم");
   const nextStaff = (await db.select({id:staff.id}).from(staff).where(and(eq(staff.id,nextStaffId),eq(staff.tenantId,tenantId),eq(staff.active,1))).limit(1))[0];
   if (!nextStaff) throw new Error("الموظف المحدد غير موجود أو غير نشط في هذا النشاط");
 
