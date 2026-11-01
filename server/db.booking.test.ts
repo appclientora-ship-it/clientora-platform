@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAvailableBookingSlots, hasBookingConflict, isBookingStartInFuture, isValidTenantTimeZone, isTenantPublicBookingEnabled, isValidBookingDate, isWithinStaffWorkingHours } from "./db";
+import { buildAvailableBookingSlots, hasBookingConflict, isBookingStartInFuture, isUniqueLocalBookingStart, isValidTenantTimeZone, isTenantPublicBookingEnabled, isValidBookingDate, isWithinStaffWorkingHours } from "./db";
 
 describe("booking date validation", () => {
   it.each([
@@ -164,5 +164,30 @@ describe("tenant IANA timezone validation", () => {
 
   it.each(["", "Invalid/Zone", "Asia/NotARealCity", "x".repeat(65)])("rejects invalid timezone %s", timeZone => {
     expect(isValidTenantTimeZone(timeZone)).toBe(false);
+  });
+});
+
+describe("DST-safe local booking starts", () => {
+  it("rejects a local time skipped by the spring clock change", () => {
+    expect(isUniqueLocalBookingStart("2026-03-29", 150, "Europe/Berlin")).toBe(false);
+  });
+
+  it("rejects a local time repeated by the autumn clock change", () => {
+    expect(isUniqueLocalBookingStart("2026-10-25", 150, "Europe/Berlin")).toBe(false);
+  });
+
+  it("accepts unique local times around both DST transitions", () => {
+    expect(isUniqueLocalBookingStart("2026-03-29", 210, "Europe/Berlin")).toBe(true);
+    expect(isUniqueLocalBookingStart("2026-10-25", 210, "Europe/Berlin")).toBe(true);
+  });
+
+  it("accepts Muscat local times because Muscat does not observe DST", () => {
+    expect(isUniqueLocalBookingStart("2026-03-29", 150, "Asia/Muscat")).toBe(true);
+  });
+
+  it("fails closed for invalid dates, minutes, and timezones", () => {
+    expect(isUniqueLocalBookingStart("2026-02-30", 150, "Europe/Berlin")).toBe(false);
+    expect(isUniqueLocalBookingStart("2026-03-29", 1440, "Europe/Berlin")).toBe(false);
+    expect(isUniqueLocalBookingStart("2026-03-29", 150, "Invalid/Zone")).toBe(false);
   });
 });
