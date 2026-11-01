@@ -84,3 +84,14 @@
 .employee-week-grid small{font-size:10px;color:#77748b}.employee-week-grid b{font-size:11px;color:#4a4560}.employee-week-grid strong{font-size:20px;color:#7545e8}.employee-week-grid span{font-size:9px;color:#9692a7}
 .content-area:has(.employee-overview)>.page-head{display:none}
 @media(max-width:650px){.employee-overview{padding:20px 13px 26px}.employee-welcome h1{font-size:23px}.employee-kpis{gap:8px}.employee-kpis article{padding:12px 9px;grid-template-columns:27px 1fr;column-gap:6px}.employee-kpis article svg{width:20px;height:20px}.employee-kpis article span{font-size:9px}.employee-kpis article strong{font-size:19px}.employee-week-grid{gap:4px}.employee-week-grid>div{padding:10px 2px}.employee-week-grid small,.employee-week-grid b{font-size:8px}.employee-week-grid strong{font-size:17px}}
+
+.app-shell:has(.employee-overview) .sidebar{background:#17162f;color:#fff;border-left:1px solid #292744;box-shadow:8px 0 30px rgba(27,22,55,.06)}
+.app-shell:has(.employee-overview) .brand-mark{background:linear-gradient(145deg,#9d76ff,#6c3bd7);box-shadow:0 8px 20px #7545e855}
+.app-shell:has(.employee-overview) .brand-lockup strong,.app-shell:has(.employee-overview) .owner-card{color:#fff}
+.app-shell:has(.employee-overview) .brand-lockup span,.app-shell:has(.employee-overview) .nav-title{color:#aaa7c5}
+.app-shell:has(.employee-overview) .workspace-switcher,.app-shell:has(.employee-overview) .salon-card{background:#22213f;border-color:#373452;color:#fff}
+.app-shell:has(.employee-overview) .workspace-switcher small,.app-shell:has(.employee-overview) .salon-card small{color:#b5b2ca}
+.app-shell:has(.employee-overview) .nav-item{color:#d2d0e3}
+.app-shell:has(.employee-overview) .nav-item.active{background:linear-gradient(100deg,#7441e6,#8b5cf6);color:#fff;border-right:0}
+.app-shell:has(.employee-overview) .topbar{background:#fff;border-color:#eceaf4}
+.app-shell:has(.employee-overview) .content-area{background:#f7f7fc}
