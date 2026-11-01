@@ -3,6 +3,7 @@ name: Quality checks
 on:
   push:
     branches:
+      - main
       - fix/booking-integrity-phase-1
   pull_request:
 
