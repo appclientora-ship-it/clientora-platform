@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinkTokens, tenants, tenantMembers, users } from "../drizzle/schema";
+import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { buildBookingDemand } from './bookingDemand';
 
@@ -37,6 +37,33 @@ export async function createTelegramLinkCode(userId: number) {
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
   await db.insert(telegramLinkTokens).values({ userId, tokenHash, expiresAt });
   return { code, expiresAt };
+}
+
+
+export async function consumeTelegramLinkCode(code: string, telegramUserId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const tokenHash = createHash("sha256").update(code).digest("hex");
+  const now = new Date();
+  return db.transaction(async (tx) => {
+    const tokenRows = await tx.select().from(telegramLinkTokens)
+      .where(and(eq(telegramLinkTokens.tokenHash, tokenHash), gte(telegramLinkTokens.expiresAt, now)))
+      .limit(1);
+    const token = tokenRows[0];
+    if (!token || token.usedAt) return { success: false as const };
+    await tx.update(telegramLinkTokens).set({ usedAt: now })
+      .where(and(eq(telegramLinkTokens.id, token.id), eq(telegramLinkTokens.tokenHash, tokenHash)));
+    const existing = await tx.select().from(telegramLinks)
+      .where(eq(telegramLinks.telegramUserId, telegramUserId)).limit(1);
+    if (existing[0] && existing[0].revokedAt === null) return { success: false as const };
+    if (existing[0]) {
+      await tx.update(telegramLinks).set({ userId: token.userId, linkedAt: now, revokedAt: null })
+        .where(eq(telegramLinks.id, existing[0].id));
+    } else {
+      await tx.insert(telegramLinks).values({ userId: token.userId, telegramUserId, linkedAt: now });
+    }
+    return { success: true as const };
+  });
 }
 
 export async function getUserByOpenId(openId: string) {
