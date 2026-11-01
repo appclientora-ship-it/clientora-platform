@@ -260,9 +260,10 @@ export async function getPublicBookingSlots(input: { slug: string; staffId: numb
   const [hoursRows, existingBookings, timeOffRows] = await Promise.all([
     db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId, tenant.id), eq(staffWorkingHours.staffId, input.staffId), eq(staffWorkingHours.weekday, weekday), eq(staffWorkingHours.active, 1))),
     db.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date))),
+    db.select().from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenant.id),eq(staffTimeOff.staffId,input.staffId),eq(staffTimeOff.date,input.date))),
   ]);
   const hours = hoursRows[0];
-  if (!hours) return [];
+  if (!hours || timeOffRows.length) return [];
   return buildAvailableBookingSlots({
     weekday,
     openMinutes: hours.openMinutes,
