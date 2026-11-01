@@ -61,6 +61,10 @@ export async function listDetailedBookings(tenantId:number,date:string) {
     .where(and(eq(bookings.tenantId,tenantId),eq(bookings.date,date))).orderBy(bookings.startMinutes);
   return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes, price:row.booking.totalPrice ?? row.service.price, staffName:row.staff.name}));
 }
+export function isTenantPublicBookingEnabled(status: "active" | "trial" | "suspended"): boolean {
+  return status !== "suspended";
+}
+
 export function isValidBookingDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(value + "T00:00:00Z");
@@ -160,7 +164,7 @@ export async function userCanManageTenant(user: User, tenantId: number) {
 export async function getPublicBookingCatalog(slug: string) {
   const db = await getDb(); if (!db) return undefined;
   const tenantRows = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
-  const tenant = tenantRows[0]; if (!tenant || tenant.status === "suspended") return undefined;
+  const tenant = tenantRows[0]; if (!tenant || !isTenantPublicBookingEnabled(tenant.status)) return undefined;
   const [serviceRows, staffRows, reviewRows] = await Promise.all([
     db.select().from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1))),
     db.select().from(staff).where(and(eq(staff.tenantId, tenant.id), eq(staff.active, 1))),
@@ -176,6 +180,7 @@ export async function createPublicBooking(input: {slug:string; clientName:string
 
   const tenantRows = await tx.select().from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
   const tenant = tenantRows[0]; if (!tenant) throw new Error("Company not found");
+   if (!isTenantPublicBookingEnabled(tenant.status)) throw new Error("الحجوزات العامة متوقفة لهذا النشاط");
   const ids = Array.from(new Set(input.serviceIds?.length ? input.serviceIds : [input.serviceId]));
   const serviceRows = await tx.select().from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1)));
   const selectedServices = ids.map(id => serviceRows.find(item => item.id === id)).filter(Boolean) as typeof serviceRows;
