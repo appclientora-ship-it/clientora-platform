@@ -89,7 +89,7 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
   const nextStart = patch.startMinutes ?? booking.startMinutes;
   const nextDuration = patch.durationMinutes ?? booking.durationMinutes;
   const parsedNextDate = new Date(nextDate + "T00:00:00Z");
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(nextDate) || Number.isNaN(parsedNextDate.getTime()) || parsedNextDate.toISOString().slice(0,10) !== nextDate) throw new Error("تاريخ الحجز غير صحيح");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || Number.isNaN(parsedNextDate.getTime()) || parsedNextDate.toISOString().slice(0,10) !== nextDate) throw new Error("تاريخ الحجز غير صحيح");
   if (!Number.isInteger(nextStart) || nextStart < 0 || nextStart > 1439) throw new Error("وقت بداية الحجز غير صحيح");
   if (!Number.isInteger(nextDuration) || nextDuration < 15 || nextDuration > 480) throw new Error("مدة الحجز يجب أن تكون بين 15 و480 دقيقة");
   if (nextStart + nextDuration > 1440) throw new Error("وقت نهاية الحجز يتجاوز نهاية اليوم");
@@ -178,7 +178,7 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   const totalDuration = selectedServices.reduce((sum,item)=>sum+item.durationMinutes,0); const totalPrice = selectedServices.reduce((sum,item)=>sum+item.price,0);
   if (!Number.isInteger(totalDuration) || totalDuration < 1 || totalDuration > 480) throw new Error("إجمالي مدة الخدمات يجب ألا يتجاوز 480 دقيقة");
   const parsedBookingDate = new Date(input.date + "T00:00:00Z");
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(input.date) || Number.isNaN(parsedBookingDate.getTime()) || parsedBookingDate.toISOString().slice(0,10) !== input.date) throw new Error("تاريخ الحجز غير صحيح");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || Number.isNaN(parsedBookingDate.getTime()) || parsedBookingDate.toISOString().slice(0,10) !== input.date) throw new Error("تاريخ الحجز غير صحيح");
   if (!Number.isInteger(input.startMinutes) || input.startMinutes < 0 || input.startMinutes > 1439 || input.startMinutes + totalDuration > 1440) throw new Error("وقت الحجز خارج حدود اليوم");
   const staffRows = await tx.select().from(staff).where(and(eq(staff.id, input.staffId), eq(staff.tenantId, tenant.id), eq(staff.active, 1))).limit(1);
   if (!staffRows[0]) throw new Error("Staff not found");
