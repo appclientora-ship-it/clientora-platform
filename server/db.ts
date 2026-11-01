@@ -212,6 +212,10 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
 
   const movingAppointment = patch.date !== undefined || patch.staffId !== undefined || patch.startMinutes !== undefined || patch.durationMinutes !== undefined;
   if (movingAppointment && patch.status !== "cancelled") {
+    const tenant = (await tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, tenantId)).limit(1))[0];
+    if (!tenant || !isLocalBookingIntervalValid(nextDate, nextStart, nextDuration, tenant.timezone || "Asia/Muscat")) {
+      throw new Error("مدة الحجز تتعارض مع تغيير التوقيت الصيفي؛ اختر موعدًا آخر");
+    }
     const weekday = new Date(nextDate + "T00:00:00Z").getUTCDay();
     const timeOff = await tx.select({id:staffTimeOff.id}).from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenantId),eq(staffTimeOff.staffId,nextStaffId),eq(staffTimeOff.date,nextDate))).limit(1);
     if (timeOff.length) throw new Error("الموظف في إجازة في هذا اليوم");
