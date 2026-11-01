@@ -126,6 +126,13 @@ export async function userCanAccessTenant(user: User, tenantId: number) {
   const rows = await db.select({ id: tenantMembers.id }).from(tenantMembers).where(and(eq(tenantMembers.userId, user.id), eq(tenantMembers.tenantId, tenantId))).limit(1);
   return rows.length > 0;
 }
+export async function userCanManageTenant(user: User, tenantId: number) {
+  if (user.role === "admin") return true;
+  const db = await getDb(); if (!db) return false;
+  const rows = await db.select({ role: tenantMembers.role }).from(tenantMembers)
+    .where(and(eq(tenantMembers.userId, user.id), eq(tenantMembers.tenantId, tenantId))).limit(1);
+  return rows[0]?.role === "owner" || rows[0]?.role === "manager";
+}
 export async function getPublicBookingCatalog(slug: string) {
   const db = await getDb(); if (!db) return undefined;
   const tenantRows = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
