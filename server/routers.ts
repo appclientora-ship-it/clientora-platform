@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { addStaff, createBookingReview, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getTenantForUser, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantSettings, userCanAccessTenant, userCanManageTenant } from "./db";
@@ -10,7 +9,7 @@ export const appRouter = router({
   system: router({ health: publicProcedure.query(() => ({ ok: true })) }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => { ctx.res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(ctx.req), maxAge: -1 }); ctx.res.clearCookie(localSessionCookie, { ...getSessionCookieOptions(ctx.req), maxAge: -1 }); return { success: true } as const; }),
+    logout: publicProcedure.mutation(({ ctx }) => { ctx.res.clearCookie(localSessionCookie, { ...getSessionCookieOptions(ctx.req), maxAge: 0 }); return { success: true } as const; }),
     register: publicProcedure.input(z.object({name:z.string().min(2).max(160),email:z.string().email(),password:z.string().min(8).max(128)})).mutation(async ({ctx,input}) => { try { const user=await registerLocalUser(input); ctx.res.cookie(localSessionCookie,sessionForUser(user.id),{...getSessionCookieOptions(ctx.req),maxAge:30*24*60*60*1000}); return user; } catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر إنشاء الحساب"}); } }),
     login: publicProcedure.input(z.object({email:z.string().email(),password:z.string().min(1).max(128)})).mutation(async ({ctx,input}) => { try { const user=await loginLocalUser(input.email,input.password); ctx.res.cookie(localSessionCookie,sessionForUser(user.id),{...getSessionCookieOptions(ctx.req),maxAge:30*24*60*60*1000}); return user; } catch(error) { throw new TRPCError({code:"UNAUTHORIZED",message:error instanceof Error?error.message:"تعذر تسجيل الدخول"}); } }),
     forgotPassword: publicProcedure.input(z.object({email:z.string().email()})).mutation(({input}) => requestPasswordReset(input.email)),
