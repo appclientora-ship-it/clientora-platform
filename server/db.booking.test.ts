@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAvailableBookingSlots, hasBookingConflict, isBookingStartInFuture, isUniqueLocalBookingStart, isValidTenantTimeZone, isTenantPublicBookingEnabled, isValidBookingDate, isWithinStaffWorkingHours } from "./db";
+import { buildAvailableBookingSlots, hasBookingConflict, isBookingStartInFuture, isLocalBookingIntervalValid, isUniqueLocalBookingStart, isValidTenantTimeZone, isTenantPublicBookingEnabled, isValidBookingDate, isWithinStaffWorkingHours } from "./db";
 
 describe("booking date validation", () => {
   it.each([
@@ -189,5 +189,34 @@ describe("DST-safe local booking starts", () => {
     expect(isUniqueLocalBookingStart("2026-02-30", 150, "Europe/Berlin")).toBe(false);
     expect(isUniqueLocalBookingStart("2026-03-29", 1440, "Europe/Berlin")).toBe(false);
     expect(isUniqueLocalBookingStart("2026-03-29", 150, "Invalid/Zone")).toBe(false);
+  });
+});
+
+describe("DST-safe booking intervals", () => {
+  it("rejects a spring-forward interval whose local end time does not exist", () => {
+    expect(isLocalBookingIntervalValid("2026-03-29", 90, 60, "Europe/Berlin")).toBe(false);
+  });
+
+  it("rejects a spring-forward interval whose elapsed time is shorter than its service duration", () => {
+    expect(isLocalBookingIntervalValid("2026-03-29", 90, 120, "Europe/Berlin")).toBe(false);
+  });
+
+  it("rejects an autumn interval whose elapsed time is longer than its service duration", () => {
+    expect(isLocalBookingIntervalValid("2026-10-25", 90, 120, "Europe/Berlin")).toBe(false);
+  });
+
+  it("accepts ordinary intervals after the spring transition and in Muscat", () => {
+    expect(isLocalBookingIntervalValid("2026-03-29", 210, 60, "Europe/Berlin")).toBe(true);
+    expect(isLocalBookingIntervalValid("2026-03-29", 150, 60, "Asia/Muscat")).toBe(true);
+  });
+
+  it("accepts a normal interval ending at local midnight", () => {
+    expect(isLocalBookingIntervalValid("2026-03-28", 1380, 60, "Europe/Berlin")).toBe(true);
+  });
+
+  it("rejects invalid duration, end-of-day overflow, and invalid timezone", () => {
+    expect(isLocalBookingIntervalValid("2026-03-29", 600, 0, "Europe/Berlin")).toBe(false);
+    expect(isLocalBookingIntervalValid("2026-03-29", 1380, 90, "Europe/Berlin")).toBe(false);
+    expect(isLocalBookingIntervalValid("2026-03-29", 600, 60, "Invalid/Zone")).toBe(false);
   });
 });
