@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import nodemailer from "nodemailer";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { getDb } from "./db";
-import { passwordResets, users, type User } from "../drizzle/schema";
+import { passwordResets, users, staffInvites, tenantMembers, staff, type User } from "../drizzle/schema";
 
 const SESSION_COOKIE = "clientora_session";
 const SESSION_TTL = 1000 * 60 * 60 * 24 * 30;
@@ -35,18 +35,43 @@ export function assertEmailRegistrationAllowed(existingUser: Pick<User, "passwor
   }
 }
 
-export async function registerLocalUser(input: {email:string;password:string;name:string}) {
+export async function registerLocalUser(input: {email:string;password:string;name:string;inviteCode?:string}) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
   const email = input.email.trim().toLowerCase();
   const existing = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];
   assertEmailRegistrationAllowed(existing);
+  const hashedPassword = await passwordHash(input.password);
+  if (input.inviteCode) {
+    const now = new Date();
+    return db.transaction(async tx => {
+      const invite = (await tx.select().from(staffInvites).where(and(
+        eq(staffInvites.code, input.inviteCode!),
+        isNull(staffInvites.acceptedAt),
+        gt(staffInvites.expiresAt, now),
+      )).limit(1))[0];
+      if (!invite || !invite.staffId) throw new Error("كود الدعوة غير صالح أو منتهي؛ اطلب دعوة جديدة من صاحب الشركة");
+      if (invite.email && invite.email.trim().toLowerCase() !== email) throw new Error("هذا الكود مخصص لبريد إلكتروني آخر");
+      const result = await tx.insert(users).values({
+        openId: `local:${crypto.randomUUID()}`, email, name: input.name.trim(),
+        loginMethod: "password", passwordHash: hashedPassword,
+      });
+      const userId = Number(result[0].insertId);
+      const linkedStaff = await tx.update(staff).set({userId}).where(and(
+        eq(staff.id, invite.staffId), eq(staff.tenantId, invite.tenantId), eq(staff.active, 1), isNull(staff.userId),
+      ));
+      if (Number(linkedStaff[0]?.affectedRows ?? 0) !== 1) throw new Error("ملف الموظف غير متاح أو مرتبط بحساب آخر؛ تواصل مع صاحب الشركة");
+      await tx.insert(tenantMembers).values({tenantId:invite.tenantId,userId,role:invite.role});
+      const accepted = await tx.update(staffInvites).set({acceptedAt:now}).where(and(
+        eq(staffInvites.id,invite.id), isNull(staffInvites.acceptedAt), gt(staffInvites.expiresAt,now),
+      ));
+      if (Number(accepted[0]?.affectedRows ?? 0) !== 1) throw new Error("تم استخدام كود الدعوة بالفعل؛ اطلب دعوة جديدة");
+      return (await tx.select().from(users).where(eq(users.id,userId)).limit(1))[0];
+    });
+  }
   const result = await db.insert(users).values({
-    openId: `local:${crypto.randomUUID()}`,
-    email,
-    name: input.name.trim(),
-    loginMethod: "password",
-    passwordHash: await passwordHash(input.password),
+    openId: `local:${crypto.randomUUID()}`, email, name: input.name.trim(),
+    loginMethod: "password", passwordHash: hashedPassword,
   });
   return (await db.select().from(users).where(eq(users.id, Number(result[0].insertId))).limit(1))[0];
 }
