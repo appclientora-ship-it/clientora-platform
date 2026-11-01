@@ -68,7 +68,6 @@ export const telegramLinks = mysqlTable("telegramLinks", {
   revokedAt: timestamp("revokedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
-  userUnique: uniqueIndex("telegramLinks_user_unique").on(table.userId),
   telegramUserUnique: uniqueIndex("telegramLinks_telegram_user_unique").on(table.telegramUserId),
 }));
 
