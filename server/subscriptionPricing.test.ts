@@ -26,11 +26,11 @@ describe("subscription pricing catalog", () => {
     [9, "basic"], [10, "growth"], [15, "growth"], [16, "business"],
     [22, "business"], [23, "pro"], [25, "pro"], [26, "enterprise"],
     [35, "enterprise"],
-  ])("assigns %i active employees to %s", (count, planId) => {
+  ] as const)("assigns %i active employees to %s", (count, planId) => {
     expect(getPlanForEmployeeCount(count)?.id).toBe(planId);
   });
 
-  it.each([0, -1, 36, 1.5, Number.NaN])("does not assign an invalid or unsupported count: %s", (count) => {
+  it.each([0, -1, 36, 1.5, Number.NaN] as const)("does not assign an invalid or unsupported count: %s", (count) => {
     expect(getPlanForEmployeeCount(count)).toBeNull();
   });
 
