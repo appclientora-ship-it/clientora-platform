@@ -54,3 +54,7 @@ export const expenses = mysqlTable("expenses", {
   id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), category: varchar("category", { length: 100 }).notNull(), description: varchar("description", { length: 240 }).notNull(), vendor: varchar("vendor", { length: 160 }), amount: int("amount").notNull(), date: varchar("date", { length: 10 }).notNull(), paymentMethod: varchar("paymentMethod", { length: 40 }).default("نقدي").notNull(), createdBy: int("createdBy"), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type User = typeof users.$inferSelect; export type InsertUser = typeof users.$inferInsert; export type Tenant = typeof tenants.$inferSelect; export type Staff = typeof staff.$inferSelect; export type Service = typeof services.$inferSelect; export type Client = typeof clients.$inferSelect; export type Booking = typeof bookings.$inferSelect;
+
+export const clientNotes = mysqlTable("clientNotes", {
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), clientId: int("clientId").notNull(), authorUserId: int("authorUserId").notNull(), note: text("note").notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
