@@ -61,6 +61,20 @@ export async function listDetailedBookings(tenantId:number,date:string) {
     .where(and(eq(bookings.tenantId,tenantId),eq(bookings.date,date))).orderBy(bookings.startMinutes);
   return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes, price:row.booking.totalPrice ?? row.service.price, staffName:row.staff.name}));
 }
+export function hasBookingConflict(
+  existing: Array<{id:number;startMinutes:number;durationMinutes:number;status:string}>,
+  candidate: {startMinutes:number;durationMinutes:number},
+  excludeBookingId?: number,
+): boolean {
+  const candidateEnd = candidate.startMinutes + candidate.durationMinutes;
+  return existing.some(item =>
+    item.id !== excludeBookingId &&
+    item.status !== "cancelled" &&
+    candidate.startMinutes < item.startMinutes + item.durationMinutes &&
+    item.startMinutes < candidateEnd
+  );
+}
+
 export async function updateBookingForTenant(tenantId:number, bookingId:number, patch:{status?:"new"|"confirmed"|"arrived"|"completed"|"cancelled"|"no_show";paid?:boolean;note?:string;durationMinutes?:number;staffId?:number;startMinutes?:number;date?:string}, actorUserId:number) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   return db.transaction(async tx => {
@@ -85,7 +99,7 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
   const movingAppointment = patch.date !== undefined || patch.staffId !== undefined || patch.startMinutes !== undefined || patch.durationMinutes !== undefined;
   if (movingAppointment && patch.status !== "cancelled") {
     const sameDay = await tx.select().from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,nextStaffId),eq(bookings.date,nextDate)));
-    const conflict = sameDay.some(item => item.id !== bookingId && item.status !== "cancelled" && nextStart < item.startMinutes + item.durationMinutes && item.startMinutes < nextStart + nextDuration);
+    const conflict = hasBookingConflict(sameDay, {startMinutes:nextStart, durationMinutes:nextDuration}, bookingId);
     if (conflict) throw new Error("هذا الموظف لديه حجز آخر في الوقت المحدد، اختر وقتاً مختلفاً");
   }
 
@@ -169,7 +183,7 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   const staffRows = await tx.select().from(staff).where(and(eq(staff.id, input.staffId), eq(staff.tenantId, tenant.id), eq(staff.active, 1))).limit(1);
   if (!staffRows[0]) throw new Error("Staff not found");
   const existing = await tx.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date)));
-  const overlaps = existing.some(item => item.status !== "cancelled" && item.startMinutes < input.startMinutes + totalDuration && input.startMinutes < item.startMinutes + item.durationMinutes);
+  const overlaps = hasBookingConflict(existing, {startMinutes:input.startMinutes, durationMinutes:totalDuration});
   if (overlaps) throw new Error("هذا الوقت محجوز بالفعل، اختر وقتاً آخر");
   const clientRows = await tx.select().from(clients).where(and(eq(clients.tenantId, tenant.id), eq(clients.phone, input.phone))).limit(1);
   let clientId = clientRows[0]?.id;
