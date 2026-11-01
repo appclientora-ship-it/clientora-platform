@@ -137,7 +137,7 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
   it("retries Telegram account linking safely after the token was consumed", async () => {
     const connection = await connectionPromise;
     const unique = randomUUID().replace(/-/g, "").slice(0, 20);
-    const userId = 1_000_000_000 + Math.floor(Math.random() * 900_000_000);
+    const userId = 1_000_000_000 + Number.parseInt(unique.slice(0, 7), 16);
     const telegramUserId = unique;
     telegramTestUsers.push({ userId, telegramUserId });
 
