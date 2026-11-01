@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -36,8 +36,8 @@ export const clients = mysqlTable("clients", {
   id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), name: varchar("name", { length: 160 }).notNull(), phone: varchar("phone", { length: 40 }), visits: int("visits").default(0).notNull(), totalSpent: int("totalSpent").default(0).notNull(), lastVisit: varchar("lastVisit", { length: 10 }),
 });
 export const bookings = mysqlTable("bookings", {
-  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), clientId: int("clientId").notNull(), staffId: int("staffId").notNull(), serviceId: int("serviceId").notNull(), date: varchar("date", { length: 10 }).notNull(), startMinutes: int("startMinutes").notNull(), durationMinutes: int("durationMinutes").default(60).notNull(), totalPrice: int("totalPrice").default(0).notNull(), status: mysqlEnum("status", ["new", "confirmed", "arrived", "completed", "cancelled", "no_show"]).default("new").notNull(), source: mysqlEnum("source", ["dashboard", "online"]).default("dashboard").notNull(), paid: int("paid").default(0).notNull(), note: text("note"), completedAt: timestamp("completedAt"), createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), clientId: int("clientId").notNull(), staffId: int("staffId").notNull(), serviceId: int("serviceId").notNull(), date: varchar("date", { length: 10 }).notNull(), startMinutes: int("startMinutes").notNull(), durationMinutes: int("durationMinutes").default(60).notNull(), totalPrice: int("totalPrice").default(0).notNull(), status: mysqlEnum("status", ["new", "confirmed", "arrived", "completed", "cancelled", "no_show"]).default("new").notNull(), source: mysqlEnum("source", ["dashboard", "online"]).default("dashboard").notNull(), paid: int("paid").default(0).notNull(), note: text("note"), completedAt: timestamp("completedAt"), idempotencyKey: varchar("idempotencyKey", { length: 64 }), requestHash: varchar("requestHash", { length: 64 }), createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({ publicRequestUnique: uniqueIndex("bookings_tenant_idempotency_unique").on(table.tenantId, table.idempotencyKey) }));
 export const bookingItems = mysqlTable("bookingItems", {
   id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), bookingId: int("bookingId").notNull(), serviceId: int("serviceId").notNull(), staffId: int("staffId").notNull(), durationMinutes: int("durationMinutes").notNull(), price: int("price").notNull(),
 });
