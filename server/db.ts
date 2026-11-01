@@ -329,7 +329,8 @@ export async function getPublicBookingCatalog(slug: string) {
     db.select().from(bookingReviews).where(and(eq(bookingReviews.tenantId, tenant.id), eq(bookingReviews.published, 1))).orderBy(desc(bookingReviews.createdAt)),
   ]);
   const staffWithRatings = staffRows.map(person => { const mine=reviewRows.filter(review=>review.staffId===person.id); const rating=mine.length ? mine.reduce((sum,item)=>sum+item.rating,0)/mine.length : 0; return {...person,rating,reviewCount:mine.length}; });
-  return { tenant, services: serviceRows, staff: staffWithRatings, reviews: reviewRows };
+  const publicReviews = reviewRows.map(({ id, staffId, rating, comment, createdAt }) => ({ id, staffId, rating, comment, createdAt }));
+  return { tenant, services: serviceRows, staff: staffWithRatings, reviews: publicReviews };
 }
 export function isWithinStaffWorkingHours(
   weekday: number,
@@ -399,7 +400,7 @@ export async function getPublicBookingSlotsByStaff(input: { slug: string; servic
   const catalog = await getPublicBookingCatalog(input.slug);
   if (!catalog || !input.serviceIds.length) return [];
   return Promise.all(catalog.staff.map(async member => ({
-    id: member.id, name: member.name, role: member.role, color: member.color,
+    id: member.id, name: member.name, role: member.role, bio: member.bio, color: member.color,
     photoUrl: member.photoUrl, rating: member.rating, reviewCount: member.reviewCount,
     slots: await getPublicBookingSlots({ slug: input.slug, staffId: member.id, serviceIds: input.serviceIds, date: input.date }),
   })));
