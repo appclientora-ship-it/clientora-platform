@@ -78,6 +78,13 @@
       "when": 1793510000001,
       "tag": "0013_staff_breaks",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1793520000000,
+      "tag": "0014_telegram_account_linking",
+      "breakpoints": true
     }
   ]
 }
