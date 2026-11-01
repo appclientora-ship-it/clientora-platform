@@ -452,3 +452,31 @@ export async function deleteStaffTimeOff(tenantId:number,staffId:number,timeOffI
 export async function listStaffHours(tenantId:number,staffId:number) { const db=await getDb(); return db ? db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,tenantId),eq(staffWorkingHours.staffId,staffId))) : []; }
 export async function saveStaffHours(tenantId:number,staffId:number,weekday:number,openMinutes:number,closeMinutes:number,active:boolean) { const db=await getDb(); if(!db) throw new Error("Database is not available"); if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) throw new Error("يوم الأسبوع غير صحيح"); if (!Number.isInteger(openMinutes) || openMinutes < 0 || openMinutes > 1439 || !Number.isInteger(closeMinutes) || closeMinutes < 1 || closeMinutes > 1440 || (active && closeMinutes <= openMinutes)) throw new Error("ساعات العمل غير صحيحة؛ يجب أن يكون وقت الإغلاق بعد الفتح وضمن اليوم"); const member=await db.select({id:staff.id}).from(staff).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))).limit(1); if(!member[0]) throw new Error("Сотрудник не найден"); const existing=await db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,tenantId),eq(staffWorkingHours.staffId,staffId),eq(staffWorkingHours.weekday,weekday))).limit(1); if(existing[0]) await db.update(staffWorkingHours).set({openMinutes,closeMinutes,active:active?1:0}).where(eq(staffWorkingHours.id,existing[0].id)); else await db.insert(staffWorkingHours).values({tenantId,staffId,weekday,openMinutes,closeMinutes,active:active?1:0}); return listStaffHours(tenantId,staffId); }
 export { bookings, clients, services, staff, tenants, tenantMembers };
+
+
+export async function listTenantClients(tenantId:number) {
+  const db=await getDb(); if(!db) return [];
+  const rows=await db.select().from(clients).where(eq(clients.tenantId,tenantId)).orderBy(clients.name);
+  const history=await db.select({booking:bookings,service:services,staff}).from(bookings)
+    .innerJoin(services,eq(bookings.serviceId,services.id)).innerJoin(staff,eq(bookings.staffId,staff.id))
+    .where(eq(bookings.tenantId,tenantId)).orderBy(desc(bookings.date),desc(bookings.startMinutes));
+  const byClient=new Map<number,typeof history>();
+  for(const row of history){const list=byClient.get(row.booking.clientId)??[];list.push(row);byClient.set(row.booking.clientId,list);}
+  return rows.map(client=>{
+    const visits=byClient.get(client.id)??[];
+    const completed=visits.filter(row=>row.booking.status==="completed");
+    const paid=visits.filter(row=>row.booking.paid===1);
+    return {...client,bookingCount:visits.length,completedVisits:completed.length,paidTotal:paid.reduce((sum,row)=>sum+row.booking.totalPrice,0),lastBookingDate:visits[0]?.booking.date??client.lastVisit??null};
+  });
+}
+
+export async function getTenantClientProfile(tenantId:number,clientId:number) {
+  const db=await getDb(); if(!db) throw new Error("Database is not available");
+  const client=(await db.select().from(clients).where(and(eq(clients.id,clientId),eq(clients.tenantId,tenantId))).limit(1))[0];
+  if(!client) throw new Error("العميل غير موجود في هذه الشركة");
+  const history=await db.select({booking:bookings,service:services,staff}).from(bookings)
+    .innerJoin(services,eq(bookings.serviceId,services.id)).innerJoin(staff,eq(bookings.staffId,staff.id))
+    .where(and(eq(bookings.tenantId,tenantId),eq(bookings.clientId,clientId)))
+    .orderBy(desc(bookings.date),desc(bookings.startMinutes));
+  return {client,bookings:history.map(row=>({...row.booking,serviceName:row.service.name,staffName:row.staff.name}))};
+}
