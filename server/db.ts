@@ -306,6 +306,33 @@ export async function getTenantForUser(user: User) {
   if (user.role === "admin") return (await db.select().from(tenants).orderBy(desc(tenants.createdAt)).limit(1))[0];
   return undefined;
 }
+export async function getTenantAccessContext(user: User) {
+  const db = await getDb(); if (!db) return undefined;
+  if (user.role === "admin") {
+    const tenant = await getTenantForUser(user);
+    return tenant ? { tenant, role: "owner" as const, staffId: null } : undefined;
+  }
+  const rows = await db.select({ tenant: tenants, role: tenantMembers.role, staffId: staff.id })
+    .from(tenantMembers)
+    .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
+    .leftJoin(staff, and(eq(staff.tenantId, tenantMembers.tenantId), eq(staff.userId, user.id)))
+    .where(eq(tenantMembers.userId, user.id)).limit(1);
+  const row = rows[0];
+  if (!row) return undefined;
+  return { tenant: row.tenant, role: row.role, staffId: row.staffId ?? null };
+}
+export async function listEmployeeBookings(tenantId:number, staffId:number, date:string, endDate?:string) {
+  const db = await getDb(); if (!db) return [];
+  const dateCondition = endDate
+    ? and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,staffId),gte(bookings.date,date),lte(bookings.date,endDate))
+    : and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,staffId),eq(bookings.date,date));
+  const rows = await db.select({booking:bookings,client:clients,service:services}).from(bookings)
+    .innerJoin(clients,eq(bookings.clientId,clients.id)).innerJoin(services,eq(bookings.serviceId,services.id))
+    .where(dateCondition).orderBy(bookings.date,bookings.startMinutes);
+  return rows.map(row=>({id:row.booking.id,date:row.booking.date,startMinutes:row.booking.startMinutes,
+    durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes,status:row.booking.status,
+    clientName:row.client.name,serviceName:row.service.name}));
+}
 export async function userCanAccessTenant(user: User, tenantId: number) {
   if (user.role === "admin") return true;
   const db = await getDb(); if (!db) return false;
