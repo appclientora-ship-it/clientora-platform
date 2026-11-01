@@ -129,3 +129,29 @@ describe("available public booking slots", () => {
     })).toEqual([]);
   });
 });
+
+
+describe("tenant timezone boundary validation", () => {
+  it("uses the Muscat local date after UTC midnight has not yet passed", () => {
+    const now = new Date("2026-10-31T20:30:00.000Z"); // 00:30 on Nov 1 in Muscat
+
+    expect(isBookingStartInFuture("2026-10-31", 1439, "Asia/Muscat", now)).toBe(false);
+    expect(isBookingStartInFuture("2026-11-01", 29, "Asia/Muscat", now)).toBe(false);
+    expect(isBookingStartInFuture("2026-11-01", 31, "Asia/Muscat", now)).toBe(true);
+  });
+
+  it("uses the Moscow local date at its UTC+3 midnight boundary", () => {
+    const now = new Date("2026-10-31T21:30:00.000Z"); // 00:30 on Nov 1 in Moscow
+
+    expect(isBookingStartInFuture("2026-10-31", 1439, "Europe/Moscow", now)).toBe(false);
+    expect(isBookingStartInFuture("2026-11-01", 29, "Europe/Moscow", now)).toBe(false);
+    expect(isBookingStartInFuture("2026-11-01", 31, "Europe/Moscow", now)).toBe(true);
+  });
+
+  it("compares the current wall-clock time after a spring DST jump", () => {
+    const now = new Date("2026-03-29T01:30:00.000Z"); // 03:30 after Berlin jumps from 02:00 to 03:00
+
+    expect(isBookingStartInFuture("2026-03-29", 180, "Europe/Berlin", now)).toBe(false);
+    expect(isBookingStartInFuture("2026-03-29", 240, "Europe/Berlin", now)).toBe(true);
+  });
+});
