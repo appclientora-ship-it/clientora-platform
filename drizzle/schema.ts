@@ -59,6 +59,30 @@ export const clientNotes = mysqlTable("clientNotes", {
   id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), clientId: int("clientId").notNull(), authorUserId: int("authorUserId").notNull(), note: text("note").notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+
+export const telegramLinks = mysqlTable("telegramLinks", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  telegramUserId: varchar("telegramUserId", { length: 32 }).notNull(),
+  linkedAt: timestamp("linkedAt").defaultNow().notNull(),
+  revokedAt: timestamp("revokedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userUnique: uniqueIndex("telegramLinks_user_unique").on(table.userId),
+  telegramUserUnique: uniqueIndex("telegramLinks_telegram_user_unique").on(table.telegramUserId),
+}));
+
+export const telegramLinkTokens = mysqlTable("telegramLinkTokens", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  tokenHash: varchar("tokenHash", { length: 128 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  usedAt: timestamp("usedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userExpiryIdx: uniqueIndex("telegramLinkTokens_user_token_unique").on(table.userId, table.tokenHash),
+}));
+
 export const staffBreaks = mysqlTable("staffBreaks", {
   id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), staffId: int("staffId").notNull(), weekday: int("weekday").notNull(), startMinutes: int("startMinutes").notNull(), endMinutes: int("endMinutes").notNull(), active: int("active").default(1).notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
