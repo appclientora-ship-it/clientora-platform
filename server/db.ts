@@ -315,7 +315,7 @@ export async function getTenantAccessContext(user: User) {
   const rows = await db.select({ tenant: tenants, role: tenantMembers.role, staffId: staff.id })
     .from(tenantMembers)
     .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
-    .leftJoin(staff, and(eq(staff.tenantId, tenantMembers.tenantId), eq(staff.userId, user.id)))
+    .leftJoin(staff, and(eq(staff.tenantId, tenantMembers.tenantId), eq(staff.userId, user.id), eq(staff.active, 1)))
     .where(eq(tenantMembers.userId, user.id)).limit(1);
   const row = rows[0];
   if (!row) return undefined;
@@ -327,7 +327,7 @@ export async function listEmployeeBookings(tenantId:number, staffId:number, date
     ? and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,staffId),gte(bookings.date,date),lte(bookings.date,endDate))
     : and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,staffId),eq(bookings.date,date));
   const rows = await db.select({booking:bookings,client:clients,service:services}).from(bookings)
-    .innerJoin(clients,eq(bookings.clientId,clients.id)).innerJoin(services,eq(bookings.serviceId,services.id))
+    .innerJoin(clients,and(eq(bookings.clientId,clients.id),eq(clients.tenantId,tenantId))).innerJoin(services,and(eq(bookings.serviceId,services.id),eq(services.tenantId,tenantId)))
     .where(dateCondition).orderBy(bookings.date,bookings.startMinutes);
   return rows.map(row=>({id:row.booking.id,date:row.booking.date,startMinutes:row.booking.startMinutes,
     durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes,status:row.booking.status,
