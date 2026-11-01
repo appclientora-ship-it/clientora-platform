@@ -161,7 +161,45 @@ export default function Home() {
   </div>;
 }
 
-function BookingCard({booking,dateLabel,onSelect,selected,onDragStart,onResize}:{booking:Booking;dateLabel:string;onSelect:()=>void;selected:boolean;onDragStart:()=>void;onResize:(duration:number)=>void}) { const meta=statusMeta[booking.status]; const [resizing,setResizing]=useState(false); const startY=useRef(0); const startDuration=useRef(booking.duration); const move=(e:MouseEvent)=>{if(!resizing)return; const delta=Math.round((e.clientY-startY.current)/44)*30; onResize(Math.max(15,Math.min(480,startDuration.current+delta)));}; const stop=()=>{setResizing(false);window.removeEventListener("mousemove",move);window.removeEventListener("mouseup",stop);}; const begin=(e:React.MouseEvent)=>{e.preventDefault();e.stopPropagation();startY.current=e.clientY;startDuration.current=booking.duration;setResizing(true);window.addEventListener("mousemove",move);window.addEventListener("mouseup",stop);}; return <button draggable={!resizing} className={`booking-card ${meta.className} ${selected ? "selected" : ""}`} style={{top:((booking.start-540)/30)*44+3,height:Math.max(58,(booking.duration/30)*44-7)}} onClick={onSelect} onDragStart={onDragStart}><span className="booking-time-band"><b>{dateLabel}</b><strong>{timeLabel(booking.start)} – {timeLabel(booking.start+booking.duration)}</strong></span><span className="booking-card-body"><b>{booking.client}</b><span>{booking.service}</span><small>{booking.price} ر.ع · {booking.duration} دقيقة</small></span><span className="booking-status"><Check size={11}/></span><MoreVertical className="booking-more" size={14}/><span className="booking-resize-handle" onMouseDown={begin} title="اسحب لتغيير مدة الحجز"><GripHorizontal size={14}/></span></button>; }
+function BookingCard({booking,dateLabel,onSelect,selected,onDragStart,onResize}:{booking:Booking;dateLabel:string;onSelect:()=>void;selected:boolean;onDragStart:()=>void;onResize:(duration:number)=>void}) {
+  const meta=statusMeta[booking.status];
+  const [resizing,setResizing]=useState(false);
+  const [previewDuration,setPreviewDuration]=useState(booking.duration);
+  const startY=useRef(0);
+  const nextDuration=useRef(booking.duration);
+  const startDuration=useRef(booking.duration);
+  const move=(e:MouseEvent)=>{
+    if(!resizing)return;
+    const delta=Math.round((e.clientY-startY.current)/44)*30;
+    const duration=Math.max(15,Math.min(480,startDuration.current+delta));
+    nextDuration.current=duration;
+    setPreviewDuration(duration);
+  };
+  const stop=()=>{
+    if(!resizing)return;
+    setResizing(false);
+    window.removeEventListener("mousemove",move);
+    window.removeEventListener("mouseup",stop);
+    if(nextDuration.current!==booking.duration)onResize(nextDuration.current);
+  };
+  const begin=(e:React.MouseEvent)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    startY.current=e.clientY;
+    startDuration.current=booking.duration;
+    nextDuration.current=booking.duration;
+    setPreviewDuration(booking.duration);
+    setResizing(true);
+    window.addEventListener("mousemove",move);
+    window.addEventListener("mouseup",stop);
+  };
+  return <button draggable={!resizing} className={`booking-card ${meta.className} ${selected ? "selected" : ""}`} style={{top:((booking.start-540)/30)*44+3,height:Math.max(58,(previewDuration/30)*44-7)}} onClick={onSelect} onDragStart={onDragStart}>
+    <span className="booking-time-band"><b>{dateLabel}</b><strong>{timeLabel(booking.start)} – {timeLabel(booking.start+booking.duration)}</strong></span>
+    <span className="booking-card-body"><b>{booking.client}</b><span>{booking.service}</span><small>{booking.price} ر.ع · {previewDuration} دقيقة</small></span>
+    <span className="booking-status"><Check size={11}/></span><MoreVertical className="booking-more" size={14}/>
+    <span className="booking-resize-handle" onMouseDown={begin} title="اسحب لتغيير مدة الحجز"><GripHorizontal size={14}/></span>
+  </button>;
+}
 function BookingPanel({booking,staff,onUpdate,onClose}:{booking:Booking|null;staff:Staff[];onUpdate:(p:Partial<Booking>)=>void;onClose:()=>void}) { if(!booking) return <aside className="details-panel empty-panel"><CalendarDays size={28}/><p>اختر حجزاً لعرض تفاصيله</p></aside>; const meta=statusMeta[booking.status]; return <aside className="details-panel"><div className="panel-head"><div><span className="eyebrow">تفاصيل الحجز</span><h2>{booking.client}</h2></div><button className="icon-button" onClick={onClose}><X size={18}/></button></div><div className="client-profile"><div className="client-avatar">{booking.client.slice(0,1)}</div><div><b>{booking.client}</b><small>{booking.phone}</small></div><span className={`status-pill ${meta.className}`}>{meta.label}</span></div><div className="detail-section"><div className="section-label"><WalletCards size={16}/> الخدمة</div><div className="service-line"><div><b>{booking.service}</b><small>{booking.duration} دقيقة</small></div><strong>{booking.price} ر.ع</strong></div><div className="total-line"><span>الإجمالي</span><b>{booking.price} ر.ع</b></div></div><div className="edit-booking-fields"><label>الموظف<select value={booking.staff} onChange={e => onUpdate({staff:+e.target.value})}>{staff.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>وقت البداية<input type="time" value={`${String(Math.floor(booking.start/60)).padStart(2,"0")}:${String(booking.start%60).padStart(2,"0")}`} onChange={e => {const [h,m]=e.target.value.split(":").map(Number);onUpdate({start:h*60+m})}}/></label></div><div className="detail-list"><div><CalendarDays size={17}/><span><small>التاريخ والوقت</small><b>{timeLabel(booking.start)} – {timeLabel(booking.start+booking.duration)}</b></span></div><div><UserRound size={17}/><span><small>الموظف</small><b>{staff.find(s => s.id === booking.staff)?.name}</b></span></div><div><CircleDollarSign size={17}/><span><small>حالة الدفع</small><b className={booking.paid ? "paid" : "unpaid"}>{booking.paid ? "مدفوع" : "غير مدفوع"} · {booking.price} ر.ع</b></span></div></div><label className="field-label">ملاحظات</label><textarea defaultValue={booking.note} onBlur={e => onUpdate({note:e.target.value})} placeholder="أضف ملاحظة للحجز..."/><div className="panel-actions"><button className="primary-button full" onClick={() => onUpdate({status:"arrived"})} disabled={booking.status === "cancelled"}><Check size={18}/> تسجيل الوصول</button><button className="soft-button full" onClick={() => onUpdate({status:"completed"})} disabled={booking.status === "cancelled"}><Check size={18}/> إنهاء الخدمة وتفعيل التقييم</button><button className="outline-button full" onClick={() => onUpdate({paid:true})} disabled={booking.paid || booking.status === "cancelled"}><WalletCards size={17}/> {booking.paid ? "تم الدفع" : "تسجيل الدفع"}</button><button className="danger-button full" onClick={() => {if(booking.paid){window.alert("لا يمكن إلغاء حجز مدفوع قبل معالجة الاسترجاع المالي");return;}if(window.confirm(`هل تريد إلغاء حجز ${booking.client}؟`)) onUpdate({status:"cancelled"});}} disabled={booking.status === "cancelled"}><Trash2 size={17}/> {booking.status === "cancelled" ? "الحجز ملغي" : "إلغاء الحجز"}</button></div><button className="edit-booking" onClick={() => onUpdate({status: booking.status === "confirmed" ? "new" : "confirmed"})} disabled={booking.status === "cancelled"}><Pencil size={15}/> تعديل حالة الحجز</button></aside>; }
 function NewBookingModal({onClose,onCreate,staff,services,initialDate,tenantId,pending}:{onClose:()=>void;onCreate:(input:{clientName:string;phone:string;serviceId:number;staffId:number;date:string;startMinutes:number;note?:string;paid:boolean})=>void;staff:Staff[];services:Service[];initialDate:string;tenantId:number;pending:boolean}) {
   const [client,setClient]=useState("");
