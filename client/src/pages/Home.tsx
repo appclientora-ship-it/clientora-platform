@@ -169,14 +169,12 @@ function BookingCard({booking,dateLabel,onSelect,selected,onDragStart,onResize}:
   const nextDuration=useRef(booking.duration);
   const startDuration=useRef(booking.duration);
   const move=(e:MouseEvent)=>{
-    if(!resizing)return;
     const delta=Math.round((e.clientY-startY.current)/44)*30;
     const duration=Math.max(15,Math.min(480,startDuration.current+delta));
     nextDuration.current=duration;
     setPreviewDuration(duration);
   };
   const stop=()=>{
-    if(!resizing)return;
     setResizing(false);
     window.removeEventListener("mousemove",move);
     window.removeEventListener("mouseup",stop);
