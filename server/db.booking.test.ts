@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasBookingConflict, isBookingStartInFuture, isTenantPublicBookingEnabled, isValidBookingDate } from "./db";
+import { buildAvailableBookingSlots, hasBookingConflict, isBookingStartInFuture, isTenantPublicBookingEnabled, isValidBookingDate, isWithinStaffWorkingHours } from "./db";
 
 describe("booking date validation", () => {
   it.each([
@@ -71,5 +71,61 @@ describe("public booking future-time validation", () => {
 
   it("fails closed for an invalid timezone", () => {
     expect(isBookingStartInFuture("2026-11-01", 600, "Invalid/Zone", now)).toBe(false);
+  });
+});
+
+
+describe("staff working hours validation", () => {
+  const hours = [{ weekday: 1, openMinutes: 540, closeMinutes: 1020, active: 1 }];
+
+  it("accepts a booking fully inside the employee shift", () => {
+    expect(isWithinStaffWorkingHours(1, 600, 60, hours)).toBe(true);
+  });
+
+  it("rejects a booking that starts before opening or ends after closing", () => {
+    expect(isWithinStaffWorkingHours(1, 510, 60, hours)).toBe(false);
+    expect(isWithinStaffWorkingHours(1, 990, 60, hours)).toBe(false);
+  });
+
+  it("rejects inactive days and missing schedules", () => {
+    expect(isWithinStaffWorkingHours(2, 600, 60, hours)).toBe(false);
+    expect(isWithinStaffWorkingHours(1, 600, 60, [{ ...hours[0], active: 0 }])).toBe(false);
+  });
+});
+
+describe("available public booking slots", () => {
+  it("returns only 30-minute slots within hours that do not overlap existing bookings", () => {
+    const slots = buildAvailableBookingSlots({
+      weekday: 1,
+      openMinutes: 540,
+      closeMinutes: 720,
+      durationMinutes: 60,
+      existingBookings: [{ id: 1, startMinutes: 600, durationMinutes: 60, status: "confirmed" }],
+      isFuture: () => true,
+    });
+    expect(slots).toEqual([540, 660]);
+  });
+
+  it("excludes past slots and does not offer slots too close to closing", () => {
+    const slots = buildAvailableBookingSlots({
+      weekday: 1,
+      openMinutes: 540,
+      closeMinutes: 630,
+      durationMinutes: 60,
+      existingBookings: [],
+      isFuture: start => start >= 570,
+    });
+    expect(slots).toEqual([570]);
+  });
+
+  it("returns no slots for an invalid or closed schedule", () => {
+    expect(buildAvailableBookingSlots({
+      weekday: 1,
+      openMinutes: 600,
+      closeMinutes: 600,
+      durationMinutes: 30,
+      existingBookings: [],
+      isFuture: () => true,
+    })).toEqual([]);
   });
 });

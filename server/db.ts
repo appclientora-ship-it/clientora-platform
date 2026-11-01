@@ -199,6 +199,69 @@ export async function getPublicBookingCatalog(slug: string) {
   const staffWithRatings = staffRows.map(person => { const mine=reviewRows.filter(review=>review.staffId===person.id); const rating=mine.length ? mine.reduce((sum,item)=>sum+item.rating,0)/mine.length : 0; return {...person,rating,reviewCount:mine.length}; });
   return { tenant, services: serviceRows, staff: staffWithRatings, reviews: reviewRows };
 }
+export function isWithinStaffWorkingHours(
+  weekday: number,
+  startMinutes: number,
+  durationMinutes: number,
+  hours: Array<{ weekday: number; openMinutes: number; closeMinutes: number; active: number }>,
+): boolean {
+  const schedule = hours.find(item => item.weekday === weekday && item.active === 1);
+  return !!schedule &&
+    Number.isInteger(startMinutes) &&
+    Number.isInteger(durationMinutes) &&
+    startMinutes >= schedule.openMinutes &&
+    startMinutes + durationMinutes <= schedule.closeMinutes;
+}
+
+export function buildAvailableBookingSlots(input: {
+  weekday: number;
+  openMinutes: number;
+  closeMinutes: number;
+  durationMinutes: number;
+  existingBookings: Array<{ id: number; startMinutes: number; durationMinutes: number; status: string }>;
+  isFuture: (startMinutes: number) => boolean;
+}): number[] {
+  const slots: number[] = [];
+  if (input.durationMinutes < 1 || input.openMinutes < 0 || input.closeMinutes > 1440 || input.closeMinutes <= input.openMinutes) return slots;
+  const firstSlot = Math.ceil(input.openMinutes / 30) * 30;
+  for (let start = firstSlot; start + input.durationMinutes <= input.closeMinutes; start += 30) {
+    if (input.isFuture(start) && !hasBookingConflict(input.existingBookings, { startMinutes: start, durationMinutes: input.durationMinutes })) {
+      slots.push(start);
+    }
+  }
+  return slots;
+}
+
+export async function getPublicBookingSlots(input: { slug: string; staffId: number; serviceIds: number[]; date: string }): Promise<number[]> {
+  const db = await getDb();
+  if (!db || !isValidBookingDate(input.date) || !input.serviceIds.length) return [];
+  const tenant = (await db.select().from(tenants).where(eq(tenants.slug, input.slug)).limit(1))[0];
+  if (!tenant || !isTenantPublicBookingEnabled(tenant.status)) return [];
+  const member = (await db.select().from(staff).where(and(eq(staff.id, input.staffId), eq(staff.tenantId, tenant.id), eq(staff.active, 1))).limit(1))[0];
+  if (!member) return [];
+  const ids = Array.from(new Set(input.serviceIds));
+  const serviceRows = await db.select().from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1)));
+  const selectedServices = ids.map(id => serviceRows.find(item => item.id === id)).filter(Boolean) as typeof serviceRows;
+  if (selectedServices.length !== ids.length) return [];
+  const durationMinutes = selectedServices.reduce((sum, item) => sum + item.durationMinutes, 0);
+  if (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > 480) return [];
+  const weekday = new Date(input.date + "T00:00:00Z").getUTCDay();
+  const [hoursRows, existingBookings] = await Promise.all([
+    db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId, tenant.id), eq(staffWorkingHours.staffId, input.staffId), eq(staffWorkingHours.weekday, weekday), eq(staffWorkingHours.active, 1))),
+    db.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date))),
+  ]);
+  const hours = hoursRows[0];
+  if (!hours) return [];
+  return buildAvailableBookingSlots({
+    weekday,
+    openMinutes: hours.openMinutes,
+    closeMinutes: hours.closeMinutes,
+    durationMinutes,
+    existingBookings,
+    isFuture: startMinutes => isBookingStartInFuture(input.date, startMinutes, tenant.timezone || "Asia/Muscat"),
+  });
+}
+
 export async function createPublicBooking(input: {slug:string; clientName:string; phone:string; serviceId:number; serviceIds?:number[]; staffId:number; date:string; startMinutes:number; note?:string}) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   return db.transaction(async tx => {
@@ -218,6 +281,9 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   if (!Number.isInteger(input.startMinutes) || input.startMinutes < 0 || input.startMinutes > 1439 || input.startMinutes + totalDuration > 1440) throw new Error("وقت الحجز خارج حدود اليوم");
   const staffRows = await tx.select().from(staff).where(and(eq(staff.id, input.staffId), eq(staff.tenantId, tenant.id), eq(staff.active, 1))).limit(1);
   if (!staffRows[0]) throw new Error("Staff not found");
+  const weekday = new Date(input.date + "T00:00:00Z").getUTCDay();
+  const staffHours = await tx.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId, tenant.id), eq(staffWorkingHours.staffId, input.staffId), eq(staffWorkingHours.weekday, weekday), eq(staffWorkingHours.active, 1))).limit(1);
+  if (!isWithinStaffWorkingHours(weekday, input.startMinutes, totalDuration, staffHours)) throw new Error("الموعد خارج ساعات عمل الموظف");
   const existing = await tx.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date)));
   const overlaps = hasBookingConflict(existing, {startMinutes:input.startMinutes, durationMinutes:totalDuration});
   if (overlaps) throw new Error("هذا الوقت محجوز بالفعل، اختر وقتاً آخر");
