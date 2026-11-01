@@ -9,20 +9,21 @@ const integrationEnabled = process.env.RUN_MYSQL_INTEGRATION === "1" && Boolean(
 describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
   const connectionPromise = mysql.createConnection(databaseUrl!);
   let tenantId = 0;
+  const createdTenantIds: number[] = [];
   let staffId = 0;
   let serviceId = 0;
 
   afterAll(async () => {
     const connection = await connectionPromise;
-    if (tenantId) {
-      await connection.execute("DELETE FROM notifications WHERE tenantId = ?", [tenantId]);
+    for (const cleanupTenantId of createdTenantIds) {
+      await connection.execute("DELETE FROM notifications WHERE tenantId = ?", [cleanupTenantId]);
       await connection.execute("DELETE FROM auditLogs WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM bookingItems WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM bookings WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM clients WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM staffWorkingHours WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM services WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM staff WHERE tenantId = ?", [tenantId]);
+      await connection.execute("DELETE FROM bookingItems WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM bookings WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM clients WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM staffWorkingHours WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM services WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM staff WHERE tenantId = ?", [cleanupTenantId]);
       await connection.execute("DELETE FROM tenants WHERE id = ?", [tenantId]);
     }
     await connection.end();
@@ -41,6 +42,7 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
       ["Concurrency Test Salon", slug],
     );
     tenantId = tenantResult.insertId;
+    createdTenantIds.push(tenantId);
 
     const [staffResult] = await connection.execute<mysql.ResultSetHeader>(
       "INSERT INTO staff (tenantId, name, role, active) VALUES (?, 'Test Stylist', 'Stylist', 1)",
