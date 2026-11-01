@@ -57,7 +57,7 @@ export default function DashboardOverview({tenantId,timezone,currency,workspaceN
 
   return <div className="clientora-dashboard">
     <div className="dashboard-heading">
-      <div><span className="dashboard-eyebrow"><span className="dashboard-live-dot"/> {dateLabel}</span><h1>{t("أهلاً بك 👋")}</h1><p>{t("إليك ملخص أداء ")}<b>{workspaceName}</b> اليوم.</p></div>
+      <div><span className="dashboard-eyebrow"><span className="dashboard-live-dot"/> {dateLabel}</span><h1>{t("أهلاً بك 👋")}</h1><p>{t("إليك ملخص أداء ")}<b>{workspaceName}</b> {t("اليوم.")}</p></div>
       <div className="dashboard-date"><CalendarDays size={18}/>{dateLabel}</div>
     </div>
     {query.isLoading ? <div className="dashboard-loading">{t("جارٍ تحميل بيانات لوحة التحكم...")}</div> : query.isError ? <div className="dashboard-empty">{t("تعذر تحميل بيانات لوحة التحكم. حاول تحديث الصفحة.")}</div> : <>
