@@ -22,7 +22,7 @@ export const appRouter = router({
   }),
   publicBooking: router({
     catalog: publicProcedure.input(z.object({ slug: z.string().min(2) })).query(({ input }) => getPublicBookingCatalog(input.slug)),
-    availableSlots: publicProcedure.input(z.object({slug:z.string().min(2),staffId:z.number().int().positive(),serviceIds:z.array(z.number().int().positive()).min(1).max(20),date:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/)})).query(({input}) => getPublicBookingSlots(input)),
+    availableSlots: publicProcedure.input(z.object({slug:z.string().min(2),staffId:z.number().int().positive(),serviceIds:z.array(z.number().int().positive()).min(1).max(20),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/)})).query(({input}) => getPublicBookingSlots(input)),
     create: publicProcedure.input(z.object({ slug:z.string().min(2), clientName:z.string().min(2), phone:z.string().min(5), serviceId:z.number().int().positive(), serviceIds:z.array(z.number().int().positive()).min(1).optional(), staffId:z.number().int().positive(), date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/), startMinutes:z.number().int().min(0).max(1439), note:z.string().max(500).optional() })).mutation(async ({ input }) => {
       try { return await createPublicBooking(input); } catch (error) { throw new TRPCError({ code:"BAD_REQUEST", message: error instanceof Error ? error.message : "تعذر إنشاء الحجز" }); }
     }),
