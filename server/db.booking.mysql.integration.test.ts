@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import mysql from "mysql2/promise";
 import { afterAll, describe, expect, it } from "vitest";
-import { createPublicBooking } from "./db";
+import { createDashboardBooking, createPublicBooking } from "./db";
 
 const databaseUrl = process.env.DATABASE_URL;
 const integrationEnabled = process.env.RUN_MYSQL_INTEGRATION === "1" && Boolean(databaseUrl);
@@ -126,5 +126,68 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
     );
     expect(rows).toHaveLength(1);
     tenantId = previousTenantId;
+  });
+
+  it("prevents a public booking and a dashboard booking from reserving the same staff time", async () => {
+    const connection = await connectionPromise;
+    const unique = randomUUID().replace(/-/g, "").slice(0, 20);
+    const slug = `mixed-path-${unique}`;
+    const phone = `+9687${unique.slice(0, 7)}`;
+    const date = "2099-03-15";
+    const weekday = new Date(`${date}T00:00:00.000Z`).getUTCDay();
+
+    const [tenantResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO tenants (name, slug, status, city, countryCode, currency, timezone, defaultLanguage) VALUES (?, ?, 'trial', 'Muscat', 'OM', 'OMR', 'Asia/Muscat', 'en')",
+      ["Mixed Path Concurrency Test", slug],
+    );
+    tenantId = tenantResult.insertId;
+    createdTenantIds.push(tenantId);
+
+    const [staffResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO staff (tenantId, name, role, active) VALUES (?, 'Test Stylist', 'Stylist', 1)",
+      [tenantId],
+    );
+    staffId = staffResult.insertId;
+
+    const [serviceResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO services (tenantId, name, category, durationMinutes, price, active) VALUES (?, 'Test Service', 'Test', 30, 1000, 1)",
+      [tenantId],
+    );
+    serviceId = serviceResult.insertId;
+
+    await connection.execute(
+      "INSERT INTO staffWorkingHours (tenantId, staffId, weekday, openMinutes, closeMinutes, active) VALUES (?, ?, ?, 0, 1440, 1)",
+      [tenantId, staffId, weekday],
+    );
+
+    const outcomes = await Promise.allSettled([
+      createPublicBooking({
+        slug,
+        clientName: "Online Client",
+        phone,
+        serviceId,
+        staffId,
+        date,
+        startMinutes: 600,
+        idempotencyKey: randomUUID(),
+      }),
+      createDashboardBooking(tenantId, 1, {
+        clientName: "Dashboard Client",
+        phone: `${phone}2`,
+        serviceId,
+        staffId,
+        date,
+        startMinutes: 600,
+      }),
+    ]);
+
+    expect(outcomes.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.filter((result) => result.status === "rejected")).toHaveLength(1);
+
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT id FROM bookings WHERE tenantId = ? AND staffId = ? AND date = ? AND startMinutes = ? AND status <> 'cancelled'",
+      [tenantId, staffId, date, 600],
+    );
+    expect(rows).toHaveLength(1);
   });
 });
