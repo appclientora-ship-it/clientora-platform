@@ -36,12 +36,19 @@ export async function listTenants() { const db = await getDb(); return db ? db.s
 export async function setTenantStatus(tenantId:number,status:"active"|"trial"|"suspended",actorUserId:number) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(tenants).set({status}).where(eq(tenants.id,tenantId)); await db.insert(auditLogs).values({tenantId,actorUserId,action:`tenant.${status}`,entity:"tenant",entityId:tenantId}); return (await db.select().from(tenants).where(eq(tenants.id,tenantId)).limit(1))[0]; }
 export async function createTenantForUser(userId: number, input: {name:string; slug:string; city?:string; currency?:string}) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
-  const existing = await db.select().from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
-  if (existing[0]) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
-  const tenantResult = await db.insert(tenants).values({name:input.name, slug:input.slug, city:input.city ?? null, currency:input.currency ?? "ر.ع", status:"trial"});
-  const tenantId = Number(tenantResult[0].insertId);
-  await db.insert(tenantMembers).values({tenantId, userId, role:"owner"});
-  return (await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1))[0];
+  try {
+    return await db.transaction(async tx => {
+      const existing = await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
+      if (existing[0]) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
+      const tenantResult = await tx.insert(tenants).values({name:input.name.trim(), slug:input.slug, city:input.city?.trim() || null, currency:input.currency ?? "ر.ع", status:"trial"});
+      const tenantId = Number(tenantResult[0].insertId);
+      await tx.insert(tenantMembers).values({tenantId, userId, role:"owner"});
+      return (await tx.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1))[0];
+    });
+  } catch (error) {
+    if (error instanceof Error && /duplicate|unique/i.test(error.message)) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
+    throw error;
+  }
 }
 export async function listBookings(tenantId: number, date: string) {
   const db = await getDb();
@@ -52,27 +59,70 @@ export async function listDetailedBookings(tenantId:number,date:string) {
   const rows = await db.select({booking:bookings, client:clients, service:services, staff}).from(bookings)
     .innerJoin(clients, eq(bookings.clientId, clients.id)).innerJoin(services, eq(bookings.serviceId, services.id)).innerJoin(staff, eq(bookings.staffId, staff.id))
     .where(and(eq(bookings.tenantId,tenantId),eq(bookings.date,date))).orderBy(bookings.startMinutes);
-  return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes || row.service.durationMinutes, price:row.booking.totalPrice || row.service.price, staffName:row.staff.name}));
+  return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes, price:row.booking.totalPrice ?? row.service.price, staffName:row.staff.name}));
 }
+export function isValidBookingDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(value + "T00:00:00Z");
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+export function hasBookingConflict(
+  existing: Array<{id:number;startMinutes:number;durationMinutes:number;status:string}>,
+  candidate: {startMinutes:number;durationMinutes:number},
+  excludeBookingId?: number,
+): boolean {
+  const candidateEnd = candidate.startMinutes + candidate.durationMinutes;
+  return existing.some(item =>
+    item.id !== excludeBookingId &&
+    item.status !== "cancelled" &&
+    candidate.startMinutes < item.startMinutes + item.durationMinutes &&
+    item.startMinutes < candidateEnd
+  );
+}
+
 export async function updateBookingForTenant(tenantId:number, bookingId:number, patch:{status?:"new"|"confirmed"|"arrived"|"completed"|"cancelled"|"no_show";paid?:boolean;note?:string;durationMinutes?:number;staffId?:number;startMinutes?:number;date?:string}, actorUserId:number) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
-  const rows = await db.select().from(bookings).where(and(eq(bookings.id,bookingId),eq(bookings.tenantId,tenantId))).limit(1); const booking = rows[0];
+  return db.transaction(async tx => {
+  await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.id,tenantId)).for("update");
+
+  const rows = await tx.select().from(bookings).where(and(eq(bookings.id,bookingId),eq(bookings.tenantId,tenantId))).limit(1); const booking = rows[0];
   if (!booking) throw new Error("الحجز غير موجود");
   if (patch.status === "cancelled" && booking.paid) throw new Error("لا يمكن إلغاء حجز مدفوع قبل معالجة الاسترجاع المالي");
+
+  const nextDate = patch.date ?? booking.date;
+  const nextStaffId = patch.staffId ?? booking.staffId;
+  const nextStart = patch.startMinutes ?? booking.startMinutes;
+  const nextDuration = patch.durationMinutes ?? booking.durationMinutes;
+  if (!isValidBookingDate(nextDate)) throw new Error("تاريخ الحجز غير صحيح");
+  if (!Number.isInteger(nextStart) || nextStart < 0 || nextStart > 1439) throw new Error("وقت بداية الحجز غير صحيح");
+  if (!Number.isInteger(nextDuration) || nextDuration < 15 || nextDuration > 480) throw new Error("مدة الحجز يجب أن تكون بين 15 و480 دقيقة");
+  if (nextStart + nextDuration > 1440) throw new Error("وقت نهاية الحجز يتجاوز نهاية اليوم");
+  const nextStaff = (await tx.select({id:staff.id}).from(staff).where(and(eq(staff.id,nextStaffId),eq(staff.tenantId,tenantId),eq(staff.active,1))).limit(1))[0];
+  if (!nextStaff) throw new Error("الموظف المحدد غير موجود أو غير نشط في هذا النشاط");
+
+  const movingAppointment = patch.date !== undefined || patch.staffId !== undefined || patch.startMinutes !== undefined || patch.durationMinutes !== undefined;
+  if (movingAppointment && patch.status !== "cancelled") {
+    const sameDay = await tx.select().from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,nextStaffId),eq(bookings.date,nextDate)));
+    const conflict = hasBookingConflict(sameDay, {startMinutes:nextStart, durationMinutes:nextDuration}, bookingId);
+    if (conflict) throw new Error("هذا الموظف لديه حجز آخر في الوقت المحدد، اختر وقتاً مختلفاً");
+  }
+
   const set: Partial<typeof bookings.$inferInsert> = {};
   if (patch.status !== undefined) set.status = patch.status;
   if (patch.status === "completed") set.completedAt = new Date();
   if (patch.paid !== undefined) set.paid = patch.paid ? 1 : 0;
   if (patch.note !== undefined) set.note = patch.note;
-  if (patch.durationMinutes !== undefined) set.durationMinutes = Math.max(15, Math.min(480, patch.durationMinutes));
-  if (patch.staffId !== undefined) set.staffId = patch.staffId;
-  if (patch.startMinutes !== undefined) set.startMinutes = Math.max(0, Math.min(1439, patch.startMinutes));
-  if (patch.date !== undefined) set.date = patch.date;
-  await db.update(bookings).set(set).where(eq(bookings.id,bookingId));
+  if (patch.durationMinutes !== undefined) set.durationMinutes = nextDuration;
+  if (patch.staffId !== undefined) set.staffId = nextStaffId;
+  if (patch.startMinutes !== undefined) set.startMinutes = nextStart;
+  if (patch.date !== undefined) set.date = nextDate;
+  await tx.update(bookings).set(set).where(and(eq(bookings.id,bookingId),eq(bookings.tenantId,tenantId)));
   const action = patch.status === "cancelled" ? "booking.cancelled" : patch.status === "completed" ? "booking.completed" : patch.paid ? "booking.paid" : "booking.updated";
-  await db.insert(auditLogs).values({tenantId,actorUserId,action,entity:"booking",entityId:bookingId});
-  await db.insert(notifications).values({tenantId,recipientStaffId:booking.staffId,type:action,title:action === "booking.cancelled" ? "تم إلغاء حجز" : action === "booking.completed" ? "اكتملت الخدمة" : "تحديث على حجز",body:`تم تحديث حجز العميل رقم ${bookingId}.`,entity:"booking",entityId:bookingId});
-  return (await db.select().from(bookings).where(eq(bookings.id,bookingId)).limit(1))[0];
+  await tx.insert(auditLogs).values({tenantId,actorUserId,action,entity:"booking",entityId:bookingId});
+  await tx.insert(notifications).values({tenantId,recipientStaffId:nextStaffId,type:action,title:action === "booking.cancelled" ? "تم إلغاء حجز" : action === "booking.completed" ? "اكتملت الخدمة" : "تحديث على حجز",body:`تم تحديث حجز العميل رقم ${bookingId}.`,entity:"booking",entityId:bookingId});
+  return (await tx.select().from(bookings).where(eq(bookings.id,bookingId)).limit(1))[0];
+  });
 }
 export async function listNotifications(tenantId:number) {
   const db = await getDb(); if (!db) return [];
@@ -100,6 +150,13 @@ export async function userCanAccessTenant(user: User, tenantId: number) {
   const rows = await db.select({ id: tenantMembers.id }).from(tenantMembers).where(and(eq(tenantMembers.userId, user.id), eq(tenantMembers.tenantId, tenantId))).limit(1);
   return rows.length > 0;
 }
+export async function userCanManageTenant(user: User, tenantId: number) {
+  if (user.role === "admin") return true;
+  const db = await getDb(); if (!db) return false;
+  const rows = await db.select({ role: tenantMembers.role }).from(tenantMembers)
+    .where(and(eq(tenantMembers.userId, user.id), eq(tenantMembers.tenantId, tenantId))).limit(1);
+  return rows[0]?.role === "owner" || rows[0]?.role === "manager";
+}
 export async function getPublicBookingCatalog(slug: string) {
   const db = await getDb(); if (!db) return undefined;
   const tenantRows = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
@@ -114,30 +171,37 @@ export async function getPublicBookingCatalog(slug: string) {
 }
 export async function createPublicBooking(input: {slug:string; clientName:string; phone:string; serviceId:number; serviceIds?:number[]; staffId:number; date:string; startMinutes:number; note?:string}) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
-  const tenantRows = await db.select().from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
+  return db.transaction(async tx => {
+  await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug,input.slug)).for("update");
+
+  const tenantRows = await tx.select().from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
   const tenant = tenantRows[0]; if (!tenant) throw new Error("Company not found");
   const ids = Array.from(new Set(input.serviceIds?.length ? input.serviceIds : [input.serviceId]));
-  const serviceRows = await db.select().from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1)));
+  const serviceRows = await tx.select().from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1)));
   const selectedServices = ids.map(id => serviceRows.find(item => item.id === id)).filter(Boolean) as typeof serviceRows;
   if (selectedServices.length !== ids.length) throw new Error("Service not found");
   const totalDuration = selectedServices.reduce((sum,item)=>sum+item.durationMinutes,0); const totalPrice = selectedServices.reduce((sum,item)=>sum+item.price,0);
-  const staffRows = await db.select().from(staff).where(and(eq(staff.id, input.staffId), eq(staff.tenantId, tenant.id), eq(staff.active, 1))).limit(1);
+  if (!Number.isInteger(totalDuration) || totalDuration < 1 || totalDuration > 480) throw new Error("إجمالي مدة الخدمات يجب ألا يتجاوز 480 دقيقة");
+  if (!isValidBookingDate(input.date)) throw new Error("تاريخ الحجز غير صحيح");
+  if (!Number.isInteger(input.startMinutes) || input.startMinutes < 0 || input.startMinutes > 1439 || input.startMinutes + totalDuration > 1440) throw new Error("وقت الحجز خارج حدود اليوم");
+  const staffRows = await tx.select().from(staff).where(and(eq(staff.id, input.staffId), eq(staff.tenantId, tenant.id), eq(staff.active, 1))).limit(1);
   if (!staffRows[0]) throw new Error("Staff not found");
-  const existing = await db.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date)));
-  const overlaps = existing.some(item => item.status !== "cancelled" && item.startMinutes < input.startMinutes + totalDuration && input.startMinutes < item.startMinutes + totalDuration);
+  const existing = await tx.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date)));
+  const overlaps = hasBookingConflict(existing, {startMinutes:input.startMinutes, durationMinutes:totalDuration});
   if (overlaps) throw new Error("هذا الوقت محجوز بالفعل، اختر وقتاً آخر");
-  const clientRows = await db.select().from(clients).where(and(eq(clients.tenantId, tenant.id), eq(clients.phone, input.phone))).limit(1);
+  const clientRows = await tx.select().from(clients).where(and(eq(clients.tenantId, tenant.id), eq(clients.phone, input.phone))).limit(1);
   let clientId = clientRows[0]?.id;
   if (!clientId) {
-    const result = await db.insert(clients).values({tenantId:tenant.id, name:input.clientName, phone:input.phone, visits:0, totalSpent:0, lastVisit:input.date});
+    const result = await tx.insert(clients).values({tenantId:tenant.id, name:input.clientName, phone:input.phone, visits:0, totalSpent:0, lastVisit:input.date});
     clientId = Number(result[0].insertId);
   }
-  const result = await db.insert(bookings).values({tenantId:tenant.id, clientId, staffId:input.staffId, serviceId:input.serviceId, date:input.date, startMinutes:input.startMinutes, durationMinutes:totalDuration, totalPrice, status:"new", source:"online", paid:0, note:input.note ?? null});
+  const result = await tx.insert(bookings).values({tenantId:tenant.id, clientId, staffId:input.staffId, serviceId:selectedServices[0].id, date:input.date, startMinutes:input.startMinutes, durationMinutes:totalDuration, totalPrice, status:"new", source:"online", paid:0, note:input.note ?? null});
   const bookingId = Number(result[0].insertId);
-  await db.insert(bookingItems).values(selectedServices.map(item => ({tenantId:tenant.id,bookingId,serviceId:item.id,staffId:input.staffId,durationMinutes:item.durationMinutes,price:item.price})));
-  await db.insert(auditLogs).values({tenantId:tenant.id,actorUserId:null,action:"booking.created",entity:"booking",entityId:bookingId});
-  await db.insert(notifications).values({tenantId:tenant.id,recipientStaffId:input.staffId,type:"booking.created",title:"حجز أونلاين جديد",body:`تم حجز ${selectedServices.map(item=>item.name).join(" + ")} للعميل ${input.clientName}.`,entity:"booking",entityId:bookingId});
+  await tx.insert(bookingItems).values(selectedServices.map(item => ({tenantId:tenant.id,bookingId,serviceId:item.id,staffId:input.staffId,durationMinutes:item.durationMinutes,price:item.price})));
+  await tx.insert(auditLogs).values({tenantId:tenant.id,actorUserId:null,action:"booking.created",entity:"booking",entityId:bookingId});
+  await tx.insert(notifications).values({tenantId:tenant.id,recipientStaffId:input.staffId,type:"booking.created",title:"حجز أونلاين جديد",body:`تم حجز ${selectedServices.map(item=>item.name).join(" + ")} للعميل ${input.clientName}.`,entity:"booking",entityId:bookingId});
   return { id: bookingId, bookingId, tenantId: tenant.id, tenantName: tenant.name, serviceName: selectedServices.map(item=>item.name).join(" + "), totalDuration, totalPrice };
+  });
 }
 export async function createBookingReview(input:{tenantId:number;bookingId:number;phone:string;rating:number;comment?:string}) {
   const db=await getDb(); if(!db) throw new Error("Database is not available");
