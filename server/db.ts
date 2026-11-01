@@ -61,6 +61,12 @@ export async function listDetailedBookings(tenantId:number,date:string) {
     .where(and(eq(bookings.tenantId,tenantId),eq(bookings.date,date))).orderBy(bookings.startMinutes);
   return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes, price:row.booking.totalPrice ?? row.service.price, staffName:row.staff.name}));
 }
+export function isValidBookingDate(value: string): boolean {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  const parsed = new Date(value + "T00:00:00Z");
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 export function hasBookingConflict(
   existing: Array<{id:number;startMinutes:number;durationMinutes:number;status:string}>,
   candidate: {startMinutes:number;durationMinutes:number},
@@ -88,8 +94,7 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
   const nextStaffId = patch.staffId ?? booking.staffId;
   const nextStart = patch.startMinutes ?? booking.startMinutes;
   const nextDuration = patch.durationMinutes ?? booking.durationMinutes;
-  const parsedNextDate = new Date(nextDate + "T00:00:00Z");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || Number.isNaN(parsedNextDate.getTime()) || parsedNextDate.toISOString().slice(0,10) !== nextDate) throw new Error("تاريخ الحجز غير صحيح");
+  if (!isValidBookingDate(nextDate)) throw new Error("تاريخ الحجز غير صحيح");
   if (!Number.isInteger(nextStart) || nextStart < 0 || nextStart > 1439) throw new Error("وقت بداية الحجز غير صحيح");
   if (!Number.isInteger(nextDuration) || nextDuration < 15 || nextDuration > 480) throw new Error("مدة الحجز يجب أن تكون بين 15 و480 دقيقة");
   if (nextStart + nextDuration > 1440) throw new Error("وقت نهاية الحجز يتجاوز نهاية اليوم");
@@ -177,8 +182,7 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   if (selectedServices.length !== ids.length) throw new Error("Service not found");
   const totalDuration = selectedServices.reduce((sum,item)=>sum+item.durationMinutes,0); const totalPrice = selectedServices.reduce((sum,item)=>sum+item.price,0);
   if (!Number.isInteger(totalDuration) || totalDuration < 1 || totalDuration > 480) throw new Error("إجمالي مدة الخدمات يجب ألا يتجاوز 480 دقيقة");
-  const parsedBookingDate = new Date(input.date + "T00:00:00Z");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || Number.isNaN(parsedBookingDate.getTime()) || parsedBookingDate.toISOString().slice(0,10) !== input.date) throw new Error("تاريخ الحجز غير صحيح");
+  if (!isValidBookingDate(input.date)) throw new Error("تاريخ الحجز غير صحيح");
   if (!Number.isInteger(input.startMinutes) || input.startMinutes < 0 || input.startMinutes > 1439 || input.startMinutes + totalDuration > 1440) throw new Error("وقت الحجز خارج حدود اليوم");
   const staffRows = await tx.select().from(staff).where(and(eq(staff.id, input.staffId), eq(staff.tenantId, tenant.id), eq(staff.active, 1))).limit(1);
   if (!staffRows[0]) throw new Error("Staff not found");
