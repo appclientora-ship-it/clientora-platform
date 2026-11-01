@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users } from "../drizzle/schema";
@@ -34,8 +34,13 @@ export async function createTelegramLinkCode(userId: number) {
   if (!db) throw new Error("Database is not available");
   const code = randomBytes(24).toString("base64url");
   const tokenHash = createHash("sha256").update(code).digest("hex");
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-  await db.insert(telegramLinkTokens).values({ userId, tokenHash, expiresAt });
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
+  await db.transaction(async (tx) => {
+    await tx.update(telegramLinkTokens).set({ usedAt: now })
+      .where(and(eq(telegramLinkTokens.userId, userId), isNull(telegramLinkTokens.usedAt)));
+    await tx.insert(telegramLinkTokens).values({ userId, tokenHash, expiresAt });
+  });
   return { code, expiresAt };
 }
 
@@ -51,11 +56,17 @@ export async function consumeTelegramLinkCode(code: string, telegramUserId: stri
       .limit(1);
     const token = tokenRows[0];
     if (!token || token.usedAt) return { success: false as const };
-    await tx.update(telegramLinkTokens).set({ usedAt: now })
-      .where(and(eq(telegramLinkTokens.id, token.id), eq(telegramLinkTokens.tokenHash, tokenHash)));
     const existing = await tx.select().from(telegramLinks)
       .where(eq(telegramLinks.telegramUserId, telegramUserId)).limit(1);
     if (existing[0] && existing[0].revokedAt === null) return { success: false as const };
+    const consumed = await tx.update(telegramLinkTokens).set({ usedAt: now })
+      .where(and(
+        eq(telegramLinkTokens.id, token.id),
+        eq(telegramLinkTokens.tokenHash, tokenHash),
+        isNull(telegramLinkTokens.usedAt),
+        gte(telegramLinkTokens.expiresAt, now),
+      ));
+    if (consumed[0].affectedRows !== 1) return { success: false as const };
     if (existing[0]) {
       await tx.update(telegramLinks).set({ userId: token.userId, linkedAt: now, revokedAt: null })
         .where(eq(telegramLinks.id, existing[0].id));
