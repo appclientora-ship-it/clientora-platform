@@ -1,8 +1,6 @@
 SET @clientora_language_column_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'language');
 --> statement-breakpoint
-SET @clientora_language_migration_sql = IF(@clientora_language_column_exists = 0, 'SET @clientora_users_language_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'language');
---> statement-breakpoint
-SET @clientora_users_language_sql = IF(@clientora_users_language_exists = 0, 'ALTER TABLE `users` ADD COLUMN `language` varchar(10) DEFAULT ''''ar'''''', ''SELECT 1'');
+SET @clientora_language_migration_sql = IF(@clientora_language_column_exists = 0, 'ALTER TABLE `users` ADD COLUMN `language` varchar(10) DEFAULT ''ar''', 'SELECT 1');
 --> statement-breakpoint
 PREPARE clientora_language_migration_stmt FROM @clientora_language_migration_sql;
 --> statement-breakpoint
@@ -10,13 +8,15 @@ EXECUTE clientora_language_migration_stmt;
 --> statement-breakpoint
 DEALLOCATE PREPARE clientora_language_migration_stmt;
 --> statement-breakpoint
-ALTER TABLE `tenants` ADD COLUMN `countryCode` varchar(2) DEFAULT ''OM''', 'SELECT 1');
+SET @clientora_tenants_countryCode_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tenants' AND COLUMN_NAME = 'countryCode');
 --> statement-breakpoint
-PREPARE clientora_users_language_stmt FROM @clientora_users_language_sql;
+SET @clientora_tenants_countryCode_sql = IF(@clientora_tenants_countryCode_exists = 0, 'ALTER TABLE `tenants` ADD COLUMN `countryCode` varchar(2) DEFAULT ''OM''', 'SELECT 1');
 --> statement-breakpoint
-EXECUTE clientora_users_language_stmt;
+PREPARE clientora_tenants_countryCode_stmt FROM @clientora_tenants_countryCode_sql;
 --> statement-breakpoint
-DEALLOCATE PREPARE clientora_users_language_stmt;
+EXECUTE clientora_tenants_countryCode_stmt;
+--> statement-breakpoint
+DEALLOCATE PREPARE clientora_tenants_countryCode_stmt;
 --> statement-breakpoint--> statement-breakpoint
 SET @clientora_tenants_timezone_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tenants' AND COLUMN_NAME = 'timezone');
 --> statement-breakpoint
