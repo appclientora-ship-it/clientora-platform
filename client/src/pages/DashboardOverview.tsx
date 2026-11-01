@@ -21,10 +21,11 @@ const dateInZone = (date:Date, timezone:string) => {
 const addDays = (iso:string, days:number) => {
   const date = new Date(iso+"T12:00:00Z"); date.setUTCDate(date.getUTCDate()+days); return date.toISOString().slice(0,10);
 };
-const weekdays = ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+const weekdayNames = { ar:["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"], en:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"], ru:["Вс","Пн","Вт","Ср","Чт","Пт","Сб"] };
 
 export default function DashboardOverview({tenantId,timezone,currency,workspaceName}:{tenantId?:number;timezone:string;currency:string;workspaceName:string}) {
   const {language,t} = useLanguage();
+  const weekdays = weekdayNames[language];
   const today = dateInZone(new Date(),timezone);
   const endDate = addDays(today,6);
   const query = trpc.workspace.bookings.useQuery(
