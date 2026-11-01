@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAvailableBookingSlots, hasBookingConflict, isBookingStartInFuture, isTenantPublicBookingEnabled, isValidBookingDate, isWithinStaffWorkingHours } from "./db";
+import { buildAvailableBookingSlots, hasBookingConflict, isBookingStartInFuture, isValidTenantTimeZone, isTenantPublicBookingEnabled, isValidBookingDate, isWithinStaffWorkingHours } from "./db";
 
 describe("booking date validation", () => {
   it.each([
@@ -153,5 +153,16 @@ describe("tenant timezone boundary validation", () => {
 
     expect(isBookingStartInFuture("2026-03-29", 180, "Europe/Berlin", now)).toBe(false);
     expect(isBookingStartInFuture("2026-03-29", 240, "Europe/Berlin", now)).toBe(true);
+  });
+});
+
+
+describe("tenant IANA timezone validation", () => {
+  it.each(["Asia/Muscat", "Europe/Moscow", "Europe/Berlin"])("accepts supported timezone %s", timeZone => {
+    expect(isValidTenantTimeZone(timeZone)).toBe(true);
+  });
+
+  it.each(["", "Invalid/Zone", "Asia/NotARealCity", "x".repeat(65)])("rejects invalid timezone %s", timeZone => {
+    expect(isValidTenantTimeZone(timeZone)).toBe(false);
   });
 });
