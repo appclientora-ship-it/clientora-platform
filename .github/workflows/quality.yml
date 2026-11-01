@@ -6,6 +6,7 @@ on:
       - main
       - fix/booking-integrity-phase-1
       - feature/clientora-production-hardening
+      - feature/clientora-hardening-integration
   pull_request:
 
 permissions:
