@@ -79,9 +79,7 @@ export const telegramLinkTokens = mysqlTable("telegramLinkTokens", {
   expiresAt: timestamp("expiresAt").notNull(),
   usedAt: timestamp("usedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, (table) => ({
-  userExpiryIdx: uniqueIndex("telegramLinkTokens_user_token_unique").on(table.userId, table.tokenHash),
-}));
+});
 
 export const staffBreaks = mysqlTable("staffBreaks", {
   id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), staffId: int("staffId").notNull(), weekday: int("weekday").notNull(), startMinutes: int("startMinutes").notNull(), endMinutes: int("endMinutes").notNull(), active: int("active").default(1).notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
