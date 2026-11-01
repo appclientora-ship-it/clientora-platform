@@ -61,6 +61,36 @@ export async function listDetailedBookings(tenantId:number,date:string) {
     .where(and(eq(bookings.tenantId,tenantId),eq(bookings.date,date))).orderBy(bookings.startMinutes);
   return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes, price:row.booking.totalPrice ?? row.service.price, staffName:row.staff.name}));
 }
+export function isTenantPublicBookingEnabled(status: "active" | "trial" | "suspended"): boolean {
+  return status !== "suspended";
+}
+
+export function isBookingStartInFuture(date: string, startMinutes: number, timeZone: string, now = new Date()): boolean {
+  try {
+    const dateParts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(now);
+    const part = (type: string) => dateParts.find(item => item.type === type)?.value ?? "";
+    const localDate = `${part("year")}-${part("month")}-${part("day")}`;
+    if (date !== localDate) return date > localDate;
+
+    const timeParts = new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(now);
+    const timePart = (type: string) => Number(timeParts.find(item => item.type === type)?.value ?? 0);
+    const currentMinutes = timePart("hour") * 60 + timePart("minute");
+    return Number.isInteger(startMinutes) && startMinutes > currentMinutes;
+  } catch {
+    return false;
+  }
+}
+
 export function isValidBookingDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(value + "T00:00:00Z");
@@ -160,7 +190,7 @@ export async function userCanManageTenant(user: User, tenantId: number) {
 export async function getPublicBookingCatalog(slug: string) {
   const db = await getDb(); if (!db) return undefined;
   const tenantRows = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
-  const tenant = tenantRows[0]; if (!tenant || tenant.status === "suspended") return undefined;
+  const tenant = tenantRows[0]; if (!tenant || !isTenantPublicBookingEnabled(tenant.status)) return undefined;
   const [serviceRows, staffRows, reviewRows] = await Promise.all([
     db.select().from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1))),
     db.select().from(staff).where(and(eq(staff.tenantId, tenant.id), eq(staff.active, 1))),
@@ -176,6 +206,7 @@ export async function createPublicBooking(input: {slug:string; clientName:string
 
   const tenantRows = await tx.select().from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
   const tenant = tenantRows[0]; if (!tenant) throw new Error("Company not found");
+   if (!isTenantPublicBookingEnabled(tenant.status)) throw new Error("الحجوزات العامة متوقفة لهذا النشاط");
   const ids = Array.from(new Set(input.serviceIds?.length ? input.serviceIds : [input.serviceId]));
   const serviceRows = await tx.select().from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1)));
   const selectedServices = ids.map(id => serviceRows.find(item => item.id === id)).filter(Boolean) as typeof serviceRows;
@@ -183,6 +214,7 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   const totalDuration = selectedServices.reduce((sum,item)=>sum+item.durationMinutes,0); const totalPrice = selectedServices.reduce((sum,item)=>sum+item.price,0);
   if (!Number.isInteger(totalDuration) || totalDuration < 1 || totalDuration > 480) throw new Error("إجمالي مدة الخدمات يجب ألا يتجاوز 480 دقيقة");
   if (!isValidBookingDate(input.date)) throw new Error("تاريخ الحجز غير صحيح");
+  if (!isBookingStartInFuture(input.date, input.startMinutes, tenant.timezone || "Asia/Muscat")) throw new Error("اختر موعدًا في المستقبل حسب التوقيت المحلي للنشاط");
   if (!Number.isInteger(input.startMinutes) || input.startMinutes < 0 || input.startMinutes > 1439 || input.startMinutes + totalDuration > 1440) throw new Error("وقت الحجز خارج حدود اليوم");
   const staffRows = await tx.select().from(staff).where(and(eq(staff.id, input.staffId), eq(staff.tenantId, tenant.id), eq(staff.active, 1))).limit(1);
   if (!staffRows[0]) throw new Error("Staff not found");
