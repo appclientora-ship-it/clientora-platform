@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasBookingConflict, isValidBookingDate } from "./db";
+import { hasBookingConflict, isTenantPublicBookingEnabled, isValidBookingDate } from "./db";
 
 describe("booking date validation", () => {
   it.each([
@@ -35,5 +35,17 @@ describe("booking overlap validation", () => {
 
   it("ignores the booking being edited", () => {
     expect(hasBookingConflict(existing, { startMinutes: 615, durationMinutes: 30 }, 1)).toBe(false);
+  });
+});
+
+
+describe("public booking availability", () => {
+  it("allows active and trial tenants to receive public bookings", () => {
+    expect(isTenantPublicBookingEnabled("active")).toBe(true);
+    expect(isTenantPublicBookingEnabled("trial")).toBe(true);
+  });
+
+  it("rejects public bookings for suspended tenants", () => {
+    expect(isTenantPublicBookingEnabled("suspended")).toBe(false);
   });
 });
