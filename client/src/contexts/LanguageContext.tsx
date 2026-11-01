@@ -225,6 +225,7 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "اسم المورد (اختياري)":"Supplier name (optional)"
     "ر.ع":"OMR",
     "إلغاء الحجز":"Cancel booking",
+    "اسحب لتغيير مدة الحجز":"Drag to change booking duration",
   },
   ru: {
     "منصة إدارة الحجوزات":"Платформа управления бронированием","مساحة تشغيل آمنة":"Защищённое рабочее пространство",
@@ -449,6 +450,7 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "اسم المورد (اختياري)":"Название поставщика (необязательно)"
     "ر.ع":"OMR",
     "إلغاء الحجز":"Отменить бронирование",
+    "اسحب لتغيير مدة الحجز":"Перетащите, чтобы изменить длительность записи",
   }
 };
 type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
