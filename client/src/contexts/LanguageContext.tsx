@@ -195,7 +195,10 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "ربما تم نقلها أو حذفها.":"It may have been moved or deleted.",
     "العودة للرئيسية":"Go home",
     "جارٍ التحقق من الجلسة...":"Checking your session...",
-    "تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن.":"Your password has been changed. You can sign in now."
+    "تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن.":"Your password has been changed. You can sign in now.",
+    "اليوم.":"today.",
+    "ملاحظة:":"Note:",
+    "إضافة مصروف / مشتريات":"Add expense / purchase"
   },
   ru: {
     "منصة إدارة الحجوزات":"Платформа управления бронированием","مساحة تشغيل آمنة":"Защищённое рабочее пространство",
@@ -390,7 +393,10 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "ربما تم نقلها أو حذفها.":"Возможно, она была перемещена или удалена.",
     "العودة للرئيسية":"На главную",
     "جارٍ التحقق من الجلسة...":"Проверка сеанса...",
-    "تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن.":"Пароль изменён. Теперь вы можете войти."
+    "تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن.":"Пароль изменён. Теперь вы можете войти.",
+    "اليوم.":"сегодня.",
+    "ملاحظة:":"Примечание:",
+    "إضافة مصروف / مشتريات":"Добавить расход / покупку"
   }
 };
 type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
