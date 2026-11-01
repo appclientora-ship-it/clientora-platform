@@ -47,25 +47,28 @@ export async function handleTelegramWebhook(req: Request, res: Response): Promis
     return;
   }
 
-  // Acknowledge quickly; Telegram retries webhook deliveries that time out.
-  res.sendStatus(200);
-
+  // Acknowledge only after processing and replying. Returning a failure status
+  // lets Telegram retry when the database or Telegram API is temporarily unavailable.
   try {
     if (text.startsWith("/start")) {
       const code = text.split(/\s+/, 2)[1];
       if (!code || code.length < 20 || code.length > 100) {
         await sendTelegramMessage(chatId!, "أهلًا بك في مساعد Clientora. لربط حسابك، أنشئ رمز الربط من داخل حسابك في Clientora ثم أرسل /start متبوعًا بالرمز.");
+        res.sendStatus(200);
         return;
       }
       const result = await consumeTelegramLinkCode(code, String(telegramUserId));
       await sendTelegramMessage(chatId!, result.success
         ? "تم ربط حساب Clientora بنجاح. أستطيع مساعدتك في شرح استخدام المنصة وإرشادك للدعم الفني. لن أطلب كلمة مرورك أو بيانات عملائك."
         : "رمز الربط غير صالح أو منتهي أو مستخدم بالفعل. أنشئ رمزًا جديدًا من داخل Clientora وحاول مرة أخرى.");
+      res.sendStatus(200);
       return;
     }
 
     await sendTelegramMessage(chatId!, "أنا مساعد دعم Clientora. يمكنني إرشادك إلى كيفية استخدام المنصة وحل المشكلات العامة. لا ترسل كلمات المرور أو بيانات العملاء هنا. ابدأ بربط حسابك عبر /start ورمز الربط من لوحة Clientora.");
+    res.sendStatus(200);
   } catch {
     // Do not log request bodies, link codes, Telegram IDs, or bot credentials.
+    if (!res.headersSent) res.sendStatus(503);
   }
 }
