@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffInvites, staffTimeOff, staffWorkingHours, tenants, tenantMembers, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { buildBookingDemand } from './bookingDemand';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
@@ -273,11 +274,25 @@ export async function listNotifications(tenantId:number) {
   return db.select().from(notifications).where(eq(notifications.tenantId,tenantId)).orderBy(desc(notifications.createdAt)).limit(20);
 }
 export async function getEmployeeReports(tenantId:number,fromDate:string,toDate:string) {
-  const db = await getDb(); if (!db) return {employees:[],totals:{bookings:0,completed:0,cancelled:0,revenue:0,paidRevenue:0}};
+  const db = await getDb();
+  if (!db) return { employees:[], totals:{bookings:0,completed:0,cancelled:0,revenue:0,paidRevenue:0}, demand:{sampleSize:0,cancelledBookings:0,days:Array.from({length:7},(_,weekday)=>({weekday,bookings:0,cancelled:0})),hours:[]} };
   const staffRows = await db.select().from(staff).where(eq(staff.tenantId,tenantId));
-  const rows = await db.select({booking:bookings,service:services}).from(bookings).innerJoin(services,eq(bookings.serviceId,services.id)).where(and(eq(bookings.tenantId,tenantId),gte(bookings.date,fromDate),lte(bookings.date,toDate)));
-  const employees = staffRows.map(person => { const mine=rows.filter(row=>row.booking.staffId===person.id); const active=mine.filter(row=>row.booking.status!=="cancelled"); return {id:person.id,name:person.name,role:person.role,bookings:mine.length,completed:mine.filter(row=>row.booking.status==="completed" || row.booking.status==="arrived").length,cancelled:mine.filter(row=>row.booking.status==="cancelled").length,noShow:mine.filter(row=>row.booking.status==="no_show").length,revenue:active.reduce((sum,row)=>sum+(row.booking.totalPrice || row.service.price),0),paidRevenue:active.filter(row=>row.booking.paid).reduce((sum,row)=>sum+(row.booking.totalPrice || row.service.price),0)}; });
-  return {employees,totals:employees.reduce((total,row)=>({bookings:total.bookings+row.bookings,completed:total.completed+row.completed,cancelled:total.cancelled+row.cancelled,revenue:total.revenue+row.revenue,paidRevenue:total.paidRevenue+row.paidRevenue}),{bookings:0,completed:0,cancelled:0,revenue:0,paidRevenue:0})};
+  const rows = await db.select({booking:bookings,service:services}).from(bookings)
+    .innerJoin(services,and(eq(bookings.serviceId,services.id),eq(services.tenantId,tenantId)))
+    .where(and(eq(bookings.tenantId,tenantId),gte(bookings.date,fromDate),lte(bookings.date,toDate)));
+  const employees = staffRows.map(person => {
+    const mine=rows.filter(row=>row.booking.staffId===person.id);
+    const active=mine.filter(row=>row.booking.status!=="cancelled");
+    return {id:person.id,name:person.name,role:person.role,bookings:mine.length,
+      completed:mine.filter(row=>row.booking.status==="completed" || row.booking.status==="arrived").length,
+      cancelled:mine.filter(row=>row.booking.status==="cancelled").length,
+      noShow:mine.filter(row=>row.booking.status==="no_show").length,
+      revenue:active.reduce((sum,row)=>sum+(row.booking.totalPrice || row.service.price),0),
+      paidRevenue:active.filter(row=>row.booking.paid).reduce((sum,row)=>sum+(row.booking.totalPrice || row.service.price),0)};
+  });
+  const totals=employees.reduce((total,row)=>({bookings:total.bookings+row.bookings,completed:total.completed+row.completed,cancelled:total.cancelled+row.cancelled,revenue:total.revenue+row.revenue,paidRevenue:total.paidRevenue+row.paidRevenue}),{bookings:0,completed:0,cancelled:0,revenue:0,paidRevenue:0});
+  const demand=buildBookingDemand(rows.map(row=>({date:row.booking.date,startMinutes:row.booking.startMinutes,status:row.booking.status})));
+  return {employees,totals,demand};
 }
 export async function listExpenses(tenantId:number,fromDate:string,toDate:string) { const db=await getDb(); return db ? db.select().from(expenses).where(and(eq(expenses.tenantId,tenantId),gte(expenses.date,fromDate),lte(expenses.date,toDate))).orderBy(desc(expenses.date),desc(expenses.id)) : []; }
 export async function createExpense(tenantId:number,createdBy:number,input:{category:string;description:string;vendor?:string;amount:number;date:string;paymentMethod:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(expenses).values({...input,tenantId,createdBy,vendor:input.vendor || null}); const id=Number(result[0].insertId); await db.insert(auditLogs).values({tenantId,actorUserId:createdBy,action:"expense.created",entity:"expense",entityId:id}); return (await db.select().from(expenses).where(eq(expenses.id,id)).limit(1))[0]; }
