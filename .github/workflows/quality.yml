@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - fix/booking-integrity-phase-1
+      - feature/clientora-production-hardening
   pull_request:
 
 permissions:
