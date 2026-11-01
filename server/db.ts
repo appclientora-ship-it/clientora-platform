@@ -133,6 +133,17 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
 
   const movingAppointment = patch.date !== undefined || patch.staffId !== undefined || patch.startMinutes !== undefined || patch.durationMinutes !== undefined;
   if (movingAppointment && patch.status !== "cancelled") {
+    const weekday = new Date(nextDate + "T00:00:00Z").getUTCDay();
+    const workingHours = await tx.select().from(staffWorkingHours).where(and(
+      eq(staffWorkingHours.tenantId, tenantId),
+      eq(staffWorkingHours.staffId, nextStaffId),
+      eq(staffWorkingHours.weekday, weekday),
+      eq(staffWorkingHours.active, 1),
+    ));
+    if (!isWithinStaffWorkingHours(weekday, nextStart, nextDuration, workingHours)) {
+      throw new Error("الموعد الجديد خارج ساعات عمل الموظف، اختر وقتاً ضمن ساعات العمل");
+    }
+
     const sameDay = await tx.select().from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,nextStaffId),eq(bookings.date,nextDate)));
     const conflict = hasBookingConflict(sameDay, {startMinutes:nextStart, durationMinutes:nextDuration}, bookingId);
     if (conflict) throw new Error("هذا الموظف لديه حجز آخر في الوقت المحدد، اختر وقتاً مختلفاً");
