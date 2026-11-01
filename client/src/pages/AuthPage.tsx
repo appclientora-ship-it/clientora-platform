@@ -22,7 +22,7 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
   const register = trpc.auth.register.useMutation({ onSuccess: () => navigate("/"), onError: e => setError(e.message) });
   const forgot = trpc.auth.forgotPassword.useMutation({ onSuccess: r => setMessage(r.message), onError: e => setError(e.message) });
   const reset = trpc.auth.resetPassword.useMutation({
-    onSuccess: () => { setMessage("تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن."); navigate("/login"); },
+    onSuccess: () => { setMessage(t("تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن.")); navigate("/login"); },
     onError: e => setError(e.message),
   });
   const submit = (event: FormEvent) => {
