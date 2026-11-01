@@ -176,21 +176,23 @@ export default function Home() {
 }
 
 function EmployeeOverview({tenantId,timezone}:{tenantId:number;timezone:string}) {
+  const {language,t} = useLanguage();
+  const locale = language === "en" ? "en-GB" : language === "ru" ? "ru-RU" : "ar";
   const today = isoDate(new Date(),timezone);
   const end = (()=>{const d=new Date(today+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+6);return d.toISOString().slice(0,10);})();
   const query = trpc.workspace.employeeBookings.useQuery({tenantId,date:today,endDate:end},{enabled:tenantId>0,refetchInterval:60000});
   const rows = query.data ?? [];
   const todayRows = rows.filter(row=>row.date===today);
   const upcoming = todayRows.filter(row=>row.startMinutes>=(()=>{const p=new Intl.DateTimeFormat("en-GB",{timeZone:timezone,hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date()).split(":").map(Number);return p[0]*60+p[1];})() && row.status!=="cancelled").sort((a,b)=>a.startMinutes-b.startMinutes);
-  const statusLabel:Record<string,string>={new:"جديد",confirmed:"مؤكد",arrived:"حضر",completed:"مكتمل",cancelled:"ملغي",no_show:"لم يحضر"};
+  const statusLabel:Record<string,string>={new:t("جديد"),confirmed:t("مؤكد"),arrived:t("حضر"),completed:t("مكتمل"),cancelled:t("ملغي"),no_show:t("لم يحضر")};
   return <div className="employee-overview">
-    <div className="employee-welcome"><span className="employee-eyebrow"><span className="dashboard-live-dot"/> مساحة الموظف</span><h1>أهلاً بك في يوم عملك 👋</h1><p>تابع مواعيدك وخدماتك القادمة بسهولة.</p></div>
-    {query.isLoading?<div className="dashboard-loading">جارٍ تحميل مواعيدك...</div>:query.isError?<div className="dashboard-empty">تعذر تحميل المواعيد. تأكد أن حسابك مرتبط بملف الموظف لدى الشركة.</div>:<>
-      <div className="employee-kpis"><article><CalendarDays/><span>حجوزات اليوم</span><strong>{todayRows.length}</strong></article><article><Clock3/><span>المواعيد القادمة</span><strong>{upcoming.length}</strong></article><article><Check/><span>مكتمل اليوم</span><strong>{todayRows.filter(row=>row.status==="completed").length}</strong></article></div>
-      <section className="dashboard-panel employee-appointments"><div className="dashboard-panel-heading"><div><h2>مواعيدي اليوم</h2><p>بيانات الحجوزات المخصصة لك فقط</p></div><span className="upcoming-count">{todayRows.length}</span></div>
-      {todayRows.length===0?<div className="dashboard-chart-empty">لا توجد حجوزات مسجلة لك اليوم.</div>:<div className="upcoming-list">{todayRows.sort((a,b)=>a.startMinutes-b.startMinutes).map(row=><div className="upcoming-row" key={row.id}><div className="upcoming-avatar">{row.clientName.slice(0,1)||"؟"}</div><div className="upcoming-client"><strong>{row.clientName}</strong><span>{row.serviceName}</span></div><div className="upcoming-time"><Clock3 size={14}/>{timeLabel(row.startMinutes)}</div><span className={`upcoming-status status-${row.status}`}>{statusLabel[row.status]??row.status}</span></div>)}</div>}
+    <div className="employee-welcome"><span className="employee-eyebrow"><span className="dashboard-live-dot"/> {t("مساحة الموظف")}</span><h1>{t("أهلاً بك في يوم عملك 👋")}</h1><p>{t("تابع مواعيدك وخدماتك القادمة بسهولة.")}</p></div>
+    {query.isLoading?<div className="dashboard-loading">{t("جارٍ تحميل مواعيدك...")}</div>:query.isError?<div className="dashboard-empty">{t("تعذر تحميل المواعيد. تأكد أن حسابك مرتبط بملف الموظف لدى الشركة.")}</div>:<>
+      <div className="employee-kpis"><article><CalendarDays/><span>{t("حجوزات اليوم")}</span><strong>{todayRows.length}</strong></article><article><Clock3/><span>{t("المواعيد القادمة")}</span><strong>{upcoming.length}</strong></article><article><Check/><span>{t("مكتمل اليوم")}</span><strong>{todayRows.filter(row=>row.status==="completed").length}</strong></article></div>
+      <section className="dashboard-panel employee-appointments"><div className="dashboard-panel-heading"><div><h2>{t("مواعيدي اليوم")}</h2><p>{t("بيانات الحجوزات المخصصة لك فقط")}</p></div><span className="upcoming-count">{todayRows.length}</span></div>
+      {todayRows.length===0?<div className="dashboard-chart-empty">{t("لا توجد حجوزات مسجلة لك اليوم.")}</div>:<div className="upcoming-list">{todayRows.sort((a,b)=>a.startMinutes-b.startMinutes).map(row=><div className="upcoming-row" key={row.id}><div className="upcoming-avatar">{row.clientName.slice(0,1)||"؟"}</div><div className="upcoming-client"><strong>{row.clientName}</strong><span>{row.serviceName}</span></div><div className="upcoming-time"><Clock3 size={14}/>{timeLabel(row.startMinutes)}</div><span className={`upcoming-status status-${row.status}`}>{statusLabel[row.status]??row.status}</span></div>)}</div>}
       </section>
-      <section className="dashboard-panel employee-week"><div className="dashboard-panel-heading"><div><h2>نظرة الأسبوع</h2><p>مواعيدك خلال الأيام السبعة القادمة</p></div></div><div className="employee-week-grid">{Array.from({length:7},(_,i)=>{const date=new Date(today+"T12:00:00Z");date.setUTCDate(date.getUTCDate()+i);const iso=date.toISOString().slice(0,10);const count=rows.filter(row=>row.date===iso&&row.status!=="cancelled").length;return <div key={iso}><small>{date.toLocaleDateString("ar",{weekday:"short",timeZone:"UTC"})}</small><b>{date.toLocaleDateString("ar",{day:"numeric",month:"short",timeZone:"UTC"})}</b><strong>{count}</strong><span>حجز</span></div>})}</div></section>
+      <section className="dashboard-panel employee-week"><div className="dashboard-panel-heading"><div><h2>{t("نظرة الأسبوع")}</h2><p>{t("مواعيدك خلال الأيام السبعة القادمة")}</p></div></div><div className="employee-week-grid">{Array.from({length:7},(_,i)=>{const date=new Date(today+"T12:00:00Z");date.setUTCDate(date.getUTCDate()+i);const iso=date.toISOString().slice(0,10);const count=rows.filter(row=>row.date===iso&&row.status!=="cancelled").length;return <div key={iso}><small>{date.toLocaleDateString(locale,{weekday:"short",timeZone:"UTC"})}</small><b>{date.toLocaleDateString(locale,{day:"numeric",month:"short",timeZone:"UTC"})}</b><strong>{count}</strong><span>{t("حجز")}</span></div>})}</div></section>
     </>}
   </div>;
 }
