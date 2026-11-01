@@ -28,7 +28,7 @@ try {
     "utf8",
   );
   const statements = migration
-    .split(/-->\\s*statement-breakpoint/g)
+    .split("--> statement-breakpoint")
     .map((statement) => statement.trim())
     .filter(Boolean);
 
