@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { timingSafeEqual } from "crypto";
-import { consumeTelegramLinkCode } from "../db";
+import { consumeTelegramLinkCode } from "./db";
 
 type TelegramUpdate = {
   message?: {
