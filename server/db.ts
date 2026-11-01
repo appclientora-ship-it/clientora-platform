@@ -310,7 +310,7 @@ export async function getTenantAccessContext(user: User) {
   const db = await getDb(); if (!db) return undefined;
   if (user.role === "admin") {
     const tenant = await getTenantForUser(user);
-    return tenant ? { tenant, role: "owner" as const, staffId: null } : undefined;
+    return tenant ? { tenantId: tenant.id, role: "owner" as const, staffId: null } : undefined;
   }
   const rows = await db.select({ tenant: tenants, role: tenantMembers.role, staffId: staff.id })
     .from(tenantMembers)
@@ -319,7 +319,7 @@ export async function getTenantAccessContext(user: User) {
     .where(eq(tenantMembers.userId, user.id)).limit(1);
   const row = rows[0];
   if (!row) return undefined;
-  return { tenant: row.tenant, role: row.role, staffId: row.staffId ?? null };
+  return { tenantId: row.tenant.id, role: row.role, staffId: row.staffId ?? null };
 }
 export async function listEmployeeBookings(tenantId:number, staffId:number, date:string, endDate?:string) {
   const db = await getDb(); if (!db) return [];
