@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { addStaff, createBookingReview, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getTenantForUser, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, userCanAccessTenant, userCanManageTenant } from "./db";
+import { addStaff, addTenantClientNote, createBookingReview, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getTenantForUser, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, userCanAccessTenant, userCanManageTenant } from "./db";
 import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, sessionForUser } from "./localAuth";
 
 export const appRouter = router({
@@ -58,6 +58,11 @@ export const appRouter = router({
       if (!(await userCanAccessTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية الوصول إلى هذه الشركة"});
       try { return await getTenantClientProfile(input.tenantId,input.clientId); }
       catch(error) { throw new TRPCError({code:"NOT_FOUND",message:error instanceof Error?error.message:"تعذر تحميل ملف العميل"}); }
+    }),
+    addClientNote: protectedProcedure.input(z.object({tenantId:z.number(),clientId:z.number().int().positive(),note:z.string().trim().min(1).max(2000)})).mutation(async ({ctx,input}) => {
+      if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية إضافة ملاحظات"});
+      try { return await addTenantClientNote(input.tenantId,input.clientId,ctx.user.id,input.note); }
+      catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر حفظ الملاحظة"}); }
     }),
     bookings: protectedProcedure.input(z.object({ tenantId: z.number(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })).query(async ({ ctx, input }) => {
       if (!(await userCanAccessTenant(ctx.user, input.tenantId))) throw new TRPCError({ code: "FORBIDDEN", message: "لا تملك صلاحية الوصول إلى هذه الشركة" });
