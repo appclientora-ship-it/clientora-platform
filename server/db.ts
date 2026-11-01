@@ -36,12 +36,19 @@ export async function listTenants() { const db = await getDb(); return db ? db.s
 export async function setTenantStatus(tenantId:number,status:"active"|"trial"|"suspended",actorUserId:number) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(tenants).set({status}).where(eq(tenants.id,tenantId)); await db.insert(auditLogs).values({tenantId,actorUserId,action:`tenant.${status}`,entity:"tenant",entityId:tenantId}); return (await db.select().from(tenants).where(eq(tenants.id,tenantId)).limit(1))[0]; }
 export async function createTenantForUser(userId: number, input: {name:string; slug:string; city?:string; currency?:string}) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
-  const existing = await db.select().from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
-  if (existing[0]) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
-  const tenantResult = await db.insert(tenants).values({name:input.name, slug:input.slug, city:input.city ?? null, currency:input.currency ?? "ر.ع", status:"trial"});
-  const tenantId = Number(tenantResult[0].insertId);
-  await db.insert(tenantMembers).values({tenantId, userId, role:"owner"});
-  return (await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1))[0];
+  try {
+    return await db.transaction(async tx => {
+      const existing = await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
+      if (existing[0]) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
+      const tenantResult = await tx.insert(tenants).values({name:input.name.trim(), slug:input.slug, city:input.city?.trim() || null, currency:input.currency ?? "ر.ع", status:"trial"});
+      const tenantId = Number(tenantResult[0].insertId);
+      await tx.insert(tenantMembers).values({tenantId, userId, role:"owner"});
+      return (await tx.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1))[0];
+    });
+  } catch (error) {
+    if (error instanceof Error && /duplicate|unique/i.test(error.message)) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
+    throw error;
+  }
 }
 export async function listBookings(tenantId: number, date: string) {
   const db = await getDb();
