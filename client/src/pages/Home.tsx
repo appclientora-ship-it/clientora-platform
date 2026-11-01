@@ -65,7 +65,12 @@ const statusMeta: Record<Status,{label:string; className:string}> = {
 };
 const pad = (n:number) => String(n).padStart(2,"0");
 const timeLabel = (minutes:number) => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
-const isoDate = (date:Date) => date.toISOString().slice(0,10);
+const isoDate = (date:Date, timeZone?:string) => {
+  if (!timeZone) return date.toISOString().slice(0,10);
+  const parts = new Intl.DateTimeFormat("en-CA",{timeZone,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(date);
+  const values = Object.fromEntries(parts.map(part => [part.type,part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+};
 const bookingFromDatabase = (row:{id:number;date:string;clientName:string;clientPhone:string;serviceName:string;staffId:number;startMinutes:number;durationMinutes:number;price:number;status:Status;paid:number;note:string|null}):Booking => ({id:row.id,date:row.date,client:row.clientName,phone:row.clientPhone,service:row.serviceName,staff:row.staffId,start:row.startMinutes,duration:row.durationMinutes,price:row.price,status:row.status,paid:Boolean(row.paid),note:row.note ?? ""});
 const notificationText = (action:string) => action === "booking.created" ? "وصل حجز أونلاين جديد" : action === "booking.cancelled" ? "تم إلغاء حجز" : action === "booking.paid" ? "تم تسجيل دفعة حجز" : "تم تحديث حجز";
 
@@ -97,7 +102,7 @@ export default function Home() {
   const displayDate = useMemo(() => { const date = new Date(today); date.setDate(date.getDate() + dateOffset); return date; }, [today,dateOffset]);
   const workspaceQuery = trpc.workspace.current.useQuery();
   const tenantId = workspaceQuery.data?.id;
-  const bookingsQuery = trpc.workspace.bookings.useQuery({tenantId:tenantId ?? 0,date:isoDate(displayDate)},{enabled:Boolean(tenantId)});
+  const bookingsQuery = trpc.workspace.bookings.useQuery({tenantId:tenantId ?? 0,date:isoDate(displayDate,workspaceQuery.data?.timezone ?? "Asia/Muscat")},{enabled:Boolean(tenantId)});
   const staffQuery = trpc.workspace.staff.useQuery({tenantId:tenantId ?? 0},{enabled:Boolean(tenantId)});
   const servicesQuery = trpc.workspace.services.useQuery({tenantId:tenantId ?? 0},{enabled:Boolean(tenantId)});
   const createServiceMutation = trpc.workspace.createService.useMutation({onSuccess:()=>{servicesQuery.refetch();setNewServiceOpen(false);notify("تمت إضافة الخدمة وحفظها");},onError:error=>notify(error.message)});
@@ -111,7 +116,7 @@ export default function Home() {
   useEffect(() => { localStorage.setItem("clientora-language",language); document.documentElement.lang=language; document.documentElement.dir=language === "ar" ? "rtl" : "ltr"; }, [language]);
   const bookingUpdate = trpc.workspace.updateBooking.useMutation({onSuccess:()=>{bookingsQuery.refetch();notificationsQuery.refetch();notify("تم حفظ تحديث الحجز");},onError:error=>notify(error.message)});
   const selected = bookings.find(b => b.id === selectedId) ?? null;
-  const dayText = displayDate.toLocaleDateString("ar-OM",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  const dayText = displayDate.toLocaleDateString("ar-OM",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:workspaceQuery.data?.timezone ?? "Asia/Muscat"});
   const filtered = useMemo(() => bookings.filter(b => (!query || `${b.client} ${b.phone} ${b.service}`.includes(query)) && (filter === "all" || b.status === filter)), [bookings, query, filter]);
   useEffect(() => { if (bookingsQuery.data) { setBookings(bookingsQuery.data.map(bookingFromDatabase)); setSelectedId(current => bookingsQuery.data.some(item => item.id === current) ? current : (bookingsQuery.data[0]?.id ?? 0)); } }, [bookingsQuery.data]);
   useEffect(() => { if (staffQuery.data) setStaff(staffQuery.data.map(item => ({id:item.id,name:item.name,role:item.role,color:item.color || "#0d8f83",initials:item.name.slice(0,2),photoUrl:item.photoUrl ?? undefined}))); }, [staffQuery.data]);
