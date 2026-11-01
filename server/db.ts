@@ -489,6 +489,46 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   return { id: bookingId, bookingId, tenantId: tenant.id, tenantName: tenant.name, serviceName: selectedServices.map(item=>item.name).join(" + "), totalDuration, totalPrice };
   });
 }
+export async function createDashboardBooking(tenantId:number, actorUserId:number, input:{clientName:string;phone:string;serviceId:number;staffId:number;date:string;startMinutes:number;note?:string;paid?:boolean}) {
+  const db=await getDb(); if(!db) throw new Error("Database is not available");
+  const clientName=input.clientName.trim(), phone=input.phone.trim();
+  if(clientName.length<2||clientName.length>160) throw new Error("اسم العميل يجب أن يكون بين حرفين و160 حرفاً");
+  if(phone.length<5||phone.length>40) throw new Error("رقم الهاتف غير صحيح");
+  if(!isValidBookingDate(input.date)) throw new Error("تاريخ الحجز غير صحيح");
+  if(!Number.isInteger(input.startMinutes)||input.startMinutes<0||input.startMinutes>1439) throw new Error("وقت بداية الحجز غير صحيح");
+  return db.transaction(async tx=>{
+    await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.id,tenantId)).for("update");
+    const tenant=(await tx.select({id:tenants.id,timezone:tenants.timezone}).from(tenants).where(eq(tenants.id,tenantId)).limit(1))[0];
+    if(!tenant) throw new Error("الشركة غير موجودة");
+    const service=(await tx.select().from(services).where(and(eq(services.id,input.serviceId),eq(services.tenantId,tenantId),eq(services.active,1))).limit(1))[0];
+    if(!service) throw new Error("الخدمة غير موجودة أو غير نشطة في هذه الشركة");
+    const member=(await tx.select().from(staff).where(and(eq(staff.id,input.staffId),eq(staff.tenantId,tenantId),eq(staff.active,1))).limit(1))[0];
+    if(!member) throw new Error("الموظف غير موجود أو غير نشط في هذه الشركة");
+    const duration=service.durationMinutes;
+    if(!Number.isInteger(duration)||duration<5||duration>480||input.startMinutes+duration>1440) throw new Error("مدة أو وقت الحجز غير صالح");
+    if(!isLocalBookingIntervalValid(input.date,input.startMinutes,duration,tenant.timezone||"Asia/Muscat")) throw new Error("فترة الحجز غير صالحة حسب المنطقة الزمنية للشركة");
+    const weekday=new Date(input.date+"T00:00:00Z").getUTCDay();
+    const timeOff=await tx.select({id:staffTimeOff.id}).from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenantId),eq(staffTimeOff.staffId,input.staffId),eq(staffTimeOff.date,input.date))).limit(1);
+    if(timeOff.length) throw new Error("الموظف في إجازة في هذا اليوم");
+    const hours=await tx.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,tenantId),eq(staffWorkingHours.staffId,input.staffId),eq(staffWorkingHours.weekday,weekday),eq(staffWorkingHours.active,1)));
+    if(!isWithinStaffWorkingHours(weekday,input.startMinutes,duration,hours)) throw new Error("الموعد خارج ساعات عمل الموظف");
+    const sameDay=await tx.select().from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,input.staffId),eq(bookings.date,input.date)));
+    if(hasBookingConflict(sameDay,{startMinutes:input.startMinutes,durationMinutes:duration})) throw new Error("هذا الموعد متعارض مع حجز آخر");
+    const existingClient=(await tx.select().from(clients).where(and(eq(clients.tenantId,tenantId),eq(clients.phone,phone))).limit(1))[0];
+    let clientId=existingClient?.id;
+    if(clientId) await tx.update(clients).set({name:clientName}).where(and(eq(clients.id,clientId),eq(clients.tenantId,tenantId)));
+    else { const created=await tx.insert(clients).values({tenantId,name:clientName,phone,visits:0,totalSpent:0,lastVisit:input.date}); clientId=Number(created[0].insertId); }
+    const idempotencyKey="dashboard:"+randomBytes(16).toString("hex");
+    const requestHash=createHash("sha256").update(JSON.stringify({tenantId,clientId,serviceId:service.id,staffId:member.id,date:input.date,startMinutes:input.startMinutes})).digest("hex");
+    const created=await tx.insert(bookings).values({tenantId,clientId,staffId:member.id,serviceId:service.id,date:input.date,startMinutes:input.startMinutes,durationMinutes:duration,totalPrice:service.price,status:"new",source:"dashboard",paid:input.paid?1:0,note:input.note?.trim()||null,idempotencyKey,requestHash});
+    const bookingId=Number(created[0].insertId);
+    await tx.insert(bookingItems).values({tenantId,bookingId,serviceId:service.id,staffId:member.id,durationMinutes:duration,price:service.price});
+    await tx.insert(auditLogs).values({tenantId,actorUserId,action:"booking.created",entity:"booking",entityId:bookingId});
+    await tx.insert(notifications).values({tenantId,recipientStaffId:member.id,type:"booking.created",title:"حجز جديد من لوحة الإدارة",body:"تم إنشاء حجز جديد للعميل "+clientName+".",entity:"booking",entityId:bookingId});
+    return {id:bookingId};
+  });
+}
+
 export async function createBookingReview(input:{tenantId:number;bookingId:number;phone:string;rating:number;comment?:string}) {
   const db=await getDb(); if(!db) throw new Error("Database is not available");
   if(input.rating<1 || input.rating>5) throw new Error("التقييم يجب أن يكون بين نجمة و5 نجوم");
