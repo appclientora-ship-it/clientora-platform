@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { addStaff, createBookingReview, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getTenantForUser, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, userCanAccessTenant, userCanManageTenant } from "./db";
+import { addStaff, createBookingReview, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getTenantForUser, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, userCanAccessTenant, userCanManageTenant } from "./db";
 import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, sessionForUser } from "./localAuth";
 
 export const appRouter = router({
@@ -50,6 +50,15 @@ export const appRouter = router({
     addStaffTimeOff: protectedProcedure.input(z.object({tenantId:z.number(),staffId:z.number(),date:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),reason:z.string().max(240).optional()})).mutation(async ({ctx,input}) => { if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية الوصول إلى هذه الشركة"}); return addStaffTimeOff(input.tenantId,input.staffId,input.date,input.reason); }),
     deleteStaffTimeOff: protectedProcedure.input(z.object({tenantId:z.number(),staffId:z.number(),timeOffId:z.number()})).mutation(async ({ctx,input}) => { if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية الوصول إلى هذه الشركة"}); return deleteStaffTimeOff(input.tenantId,input.staffId,input.timeOffId); }),
     saveStaffHours: protectedProcedure.input(z.object({tenantId:z.number(),staffId:z.number(),weekday:z.number().int().min(0).max(6),openMinutes:z.number().int().min(0).max(1439),closeMinutes:z.number().int().min(1).max(1440),active:z.boolean()}).refine(value => !value.active || value.closeMinutes > value.openMinutes, {message:"وقت الإغلاق يجب أن يكون بعد وقت الفتح",path:["closeMinutes"]})).mutation(async ({ctx,input}) => { if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية الوصول إلى هذه الشركة"}); return saveStaffHours(input.tenantId,input.staffId,input.weekday,input.openMinutes,input.closeMinutes,input.active); }),
+    clients: protectedProcedure.input(z.object({tenantId:z.number()})).query(async ({ctx,input}) => {
+      if (!(await userCanAccessTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية الوصول إلى هذه الشركة"});
+      return listTenantClients(input.tenantId);
+    }),
+    clientProfile: protectedProcedure.input(z.object({tenantId:z.number(),clientId:z.number().int().positive()})).query(async ({ctx,input}) => {
+      if (!(await userCanAccessTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية الوصول إلى هذه الشركة"});
+      try { return await getTenantClientProfile(input.tenantId,input.clientId); }
+      catch(error) { throw new TRPCError({code:"NOT_FOUND",message:error instanceof Error?error.message:"تعذر تحميل ملف العميل"}); }
+    }),
     bookings: protectedProcedure.input(z.object({ tenantId: z.number(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })).query(async ({ ctx, input }) => {
       if (!(await userCanAccessTenant(ctx.user, input.tenantId))) throw new TRPCError({ code: "FORBIDDEN", message: "لا تملك صلاحية الوصول إلى هذه الشركة" });
       return listDetailedBookings(input.tenantId, input.date);
