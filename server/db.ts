@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clients, expenses, notifications, services, staff, staffInvites, staffTimeOff, staffWorkingHours, tenants, tenantMembers, users } from "../drizzle/schema";
+import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffInvites, staffTimeOff, staffWorkingHours, tenants, tenantMembers, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -69,7 +69,8 @@ export async function getTenantClientProfile(tenantId:number,clientId:number) {
     .where(and(eq(bookings.tenantId,tenantId),eq(bookings.clientId,clientId)))
     .orderBy(desc(bookings.date),desc(bookings.startMinutes));
   const history=rows.map(row=>({...row.booking,serviceName:row.service.name,staffName:row.staff.name}));
-  return {client,bookings:history,visitCount:history.filter(item=>item.status==="completed").length,paidTotal:history.filter(item=>item.paid===1).reduce((sum,item)=>sum+item.totalPrice,0)};
+  const notes=await db.select().from(clientNotes).where(and(eq(clientNotes.tenantId,tenantId),eq(clientNotes.clientId,clientId))).orderBy(desc(clientNotes.createdAt));
+  return {client,bookings:history,notes,visitCount:history.filter(item=>item.status==="completed").length,paidTotal:history.filter(item=>item.paid===1).reduce((sum,item)=>sum+item.totalPrice,0)};
 }
 export async function listDetailedBookings(tenantId:number,date:string) {
   const db = await getDb(); if (!db) return [];
@@ -469,3 +470,11 @@ export async function deleteStaffTimeOff(tenantId:number,staffId:number,timeOffI
 export async function listStaffHours(tenantId:number,staffId:number) { const db=await getDb(); return db ? db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,tenantId),eq(staffWorkingHours.staffId,staffId))) : []; }
 export async function saveStaffHours(tenantId:number,staffId:number,weekday:number,openMinutes:number,closeMinutes:number,active:boolean) { const db=await getDb(); if(!db) throw new Error("Database is not available"); if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) throw new Error("يوم الأسبوع غير صحيح"); if (!Number.isInteger(openMinutes) || openMinutes < 0 || openMinutes > 1439 || !Number.isInteger(closeMinutes) || closeMinutes < 1 || closeMinutes > 1440 || (active && closeMinutes <= openMinutes)) throw new Error("ساعات العمل غير صحيحة؛ يجب أن يكون وقت الإغلاق بعد الفتح وضمن اليوم"); const member=await db.select({id:staff.id}).from(staff).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))).limit(1); if(!member[0]) throw new Error("Сотрудник не найден"); const existing=await db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,tenantId),eq(staffWorkingHours.staffId,staffId),eq(staffWorkingHours.weekday,weekday))).limit(1); if(existing[0]) await db.update(staffWorkingHours).set({openMinutes,closeMinutes,active:active?1:0}).where(eq(staffWorkingHours.id,existing[0].id)); else await db.insert(staffWorkingHours).values({tenantId,staffId,weekday,openMinutes,closeMinutes,active:active?1:0}); return listStaffHours(tenantId,staffId); }
 export { bookings, clients, services, staff, tenants, tenantMembers };
+
+export async function addTenantClientNote(tenantId:number,clientId:number,authorUserId:number,note:string) {
+  const db=await getDb(); if(!db) throw new Error("Database is not available");
+  const client=(await db.select({id:clients.id}).from(clients).where(and(eq(clients.id,clientId),eq(clients.tenantId,tenantId))).limit(1))[0];
+  if(!client) throw new Error("العميل غير موجود في هذه الشركة");
+  await db.insert(clientNotes).values({tenantId,clientId,authorUserId,note:note.trim()});
+  return {success:true};
+}
