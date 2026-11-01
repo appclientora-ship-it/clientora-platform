@@ -3,8 +3,9 @@ import { bookingDateSchema } from "./validation";
 import { TRPCError } from "@trpc/server";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, userCanAccessTenant, userCanManageTenant } from "./db";
+import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, userCanAccessTenant, userCanManageTenant, countActiveTenantStaff } from "./db";
 import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, sessionForUser } from "./localAuth";
+import { calculateSubscriptionQuote } from "./subscriptionPricing";
 
 export const appRouter = router({
   system: router({ health: publicProcedure.query(() => ({ ok: true })) }),
@@ -34,6 +35,13 @@ export const appRouter = router({
   }),
   workspace: router({
     current: protectedProcedure.query(({ ctx }) => getTenantForUser(ctx.user)),
+    subscriptionQuote: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),months:z.union([z.literal(1),z.literal(3),z.literal(9),z.literal(12)])})).query(async ({ctx,input}) => {
+      if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية عرض اشتراك هذه الشركة"});
+      const employeeCount = await countActiveTenantStaff(input.tenantId);
+      try { return calculateSubscriptionQuote(employeeCount,input.months); }
+      catch(error) { throw new TRPCError({code:"PRECONDITION_FAILED",message:error instanceof Error?error.message:"تعذر حساب الباقة"}); }
+    }),
+
     smartSchedule: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),serviceId:z.number().int().positive(),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/)})).query(async ({ctx,input}) => {
       if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية إدارة جدول هذه الشركة"});
       try { return await getSmartScheduleSuggestions(input); }
