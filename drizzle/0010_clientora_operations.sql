@@ -1,18 +1,13 @@
-SET @clientora_language_column_exists = (
-  SELECT COUNT(*)
-  FROM INFORMATION_SCHEMA.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE()
-    AND TABLE_NAME = 'users'
-    AND COLUMN_NAME = 'language'
-);
-SET @clientora_language_migration_sql = IF(
-  @clientora_language_column_exists = 0,
-  'ALTER TABLE `users` ADD COLUMN `language` varchar(10) DEFAULT ''ar''',
-  'SELECT 1'
-);
+SET @clientora_language_column_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'language');
+--> statement-breakpoint
+SET @clientora_language_migration_sql = IF(@clientora_language_column_exists = 0, 'ALTER TABLE `users` ADD COLUMN `language` varchar(10) DEFAULT ''ar''', 'SELECT 1');
+--> statement-breakpoint
 PREPARE clientora_language_migration_stmt FROM @clientora_language_migration_sql;
+--> statement-breakpoint
 EXECUTE clientora_language_migration_stmt;
-DEALLOCATE PREPARE clientora_language_migration_stmt;--> statement-breakpoint
+--> statement-breakpoint
+DEALLOCATE PREPARE clientora_language_migration_stmt;
+--> statement-breakpoint
 ALTER TABLE `tenants` ADD COLUMN `countryCode` varchar(2) DEFAULT 'OM';--> statement-breakpoint
 ALTER TABLE `tenants` ADD COLUMN `timezone` varchar(64) DEFAULT 'Asia/Muscat';--> statement-breakpoint
 ALTER TABLE `tenants` ADD COLUMN `defaultLanguage` varchar(10) DEFAULT 'ar';--> statement-breakpoint
