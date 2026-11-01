@@ -255,6 +255,18 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
     if (!isWithinStaffWorkingHours(weekday, nextStart, nextDuration, workingHours)) {
       throw new Error("الموعد الجديد خارج ساعات عمل الموظف، اختر وقتاً ضمن ساعات العمل");
     }
+    const breaks = await tx.select({
+      startMinutes: staffBreaks.startMinutes,
+      endMinutes: staffBreaks.endMinutes,
+    }).from(staffBreaks).where(and(
+      eq(staffBreaks.tenantId, tenantId),
+      eq(staffBreaks.staffId, nextStaffId),
+      eq(staffBreaks.weekday, weekday),
+      eq(staffBreaks.active, 1),
+    ));
+    if (hasStaffBreakConflict(breaks, { startMinutes: nextStart, durationMinutes: nextDuration })) {
+      throw new Error("الموعد الجديد يتعارض مع فترة استراحة الموظف");
+    }
 
     const sameDay = await tx.select().from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,nextStaffId),eq(bookings.date,nextDate)));
     const conflict = hasBookingConflict(sameDay, {startMinutes:nextStart, durationMinutes:nextDuration}, bookingId);
