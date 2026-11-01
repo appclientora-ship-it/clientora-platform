@@ -402,6 +402,38 @@ export async function getPublicBookingSlotsByStaff(input: { slug: string; servic
   })));
 }
 
+
+export async function getSmartScheduleSuggestions(input:{tenantId:number;serviceId:number;date:string}) {
+  const db=await getDb();
+  if(!db) throw new Error("Database is not available");
+  if(!isValidBookingDate(input.date)) throw new Error("تاريخ الحجز غير صحيح");
+  const tenant=(await db.select().from(tenants).where(eq(tenants.id,input.tenantId)).limit(1))[0];
+  if(!tenant) throw new Error("الشركة غير موجودة");
+  const service=(await db.select().from(services).where(and(eq(services.id,input.serviceId),eq(services.tenantId,input.tenantId),eq(services.active,1))).limit(1))[0];
+  if(!service) throw new Error("الخدمة غير موجودة أو غير مفعلة");
+  const weekday=new Date(input.date+"T00:00:00.000Z").getUTCDay();
+  const team=await db.select().from(staff).where(and(eq(staff.tenantId,input.tenantId),eq(staff.active,1)));
+  const suggestions=await Promise.all(team.map(async member=>{
+    const [hoursRows,bookingsForDay,timeOff]=await Promise.all([
+      db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,input.tenantId),eq(staffWorkingHours.staffId,member.id),eq(staffWorkingHours.weekday,weekday),eq(staffWorkingHours.active,1))),
+      db.select().from(bookings).where(and(eq(bookings.tenantId,input.tenantId),eq(bookings.staffId,member.id),eq(bookings.date,input.date))),
+      db.select({id:staffTimeOff.id}).from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,input.tenantId),eq(staffTimeOff.staffId,member.id),eq(staffTimeOff.date,input.date))),
+    ]);
+    const hours=hoursRows[0];
+    if(!hours||timeOff.length) return null;
+    const activeBookings=bookingsForDay.filter(item=>item.status!=="cancelled");
+    const slots=buildAvailableBookingSlots({
+      weekday,openMinutes:hours.openMinutes,closeMinutes:hours.closeMinutes,
+      durationMinutes:service.durationMinutes,existingBookings:bookingsForDay,
+      isFuture:start=>isLocalBookingIntervalValid(input.date,start,service.durationMinutes,tenant.timezone||"Asia/Muscat")&&isBookingStartInFuture(input.date,start,tenant.timezone||"Asia/Muscat"),
+    });
+    if(!slots.length) return null;
+    return {staffId:member.id,staffName:member.name,role:member.role,availableSlots:slots,workload:activeBookings.length,firstAvailable:slots[0]};
+  }));
+  return suggestions.filter((item):item is NonNullable<typeof item>=>item!==null)
+    .sort((a,b)=>a.workload-b.workload||a.firstAvailable-b.firstAvailable||a.staffName.localeCompare(b.staffName));
+}
+
 export async function createPublicBooking(input: {slug:string; clientName:string; phone:string; serviceId:number; serviceIds?:number[]; staffId:number; date:string; startMinutes:number; note?:string; idempotencyKey:string}) {
   const idempotencyKey = input.idempotencyKey.trim();
   if (!idempotencyKey || idempotencyKey.length > 64) {
