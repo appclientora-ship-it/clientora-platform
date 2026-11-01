@@ -43,3 +43,5 @@
 .calendar-grid{position:relative}.current-time-line{left:66px;right:0;z-index:8;pointer-events:none}.current-time-line span{white-space:nowrap}.calendar-scroll{scrollbar-gutter:stable}
 
 .auth-account-types{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 14px}.auth-account-types button{border:1px solid var(--line,#dce8e4);border-radius:10px;background:#fff;padding:10px;color:#52675f;font-weight:600}.auth-account-types button.selected{border-color:var(--brand,#0d8f83);background:#e7f6f2;color:var(--brand,#0d8f83)}
+
+.language-switch-inline{display:flex;align-items:center;gap:3px;border:1px solid var(--line);border-radius:9px;padding:3px}.language-switch-inline button{border:0;background:transparent;color:var(--muted);font-size:9px;font-weight:700;padding:5px 6px;border-radius:6px}.language-switch-inline button.active{background:var(--brand);color:#fff}
