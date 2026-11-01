@@ -36,3 +36,21 @@
 .insight-card p{font-size:12px;line-height:1.7;color:#526b63;margin:5px 0}
 .insight-card small{display:block;font-size:11px;line-height:1.7;color:#087e72}
 @media(max-width:640px){.business-intelligence{padding:14px}.business-intelligence .section-heading{align-items:flex-start}.insight-list{grid-template-columns:1fr}}
+
+/* Weekly booking overview */
+.week-overview{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;align-items:stretch}
+.week-day-card{min-width:0;min-height:230px;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--line);border-radius:13px;background:var(--surface);box-shadow:0 5px 18px rgba(22,53,45,.045)}
+.week-day-card>header{display:grid;grid-template-columns:1fr auto;gap:3px 8px;align-items:center;padding:12px;background:var(--surface-soft);border-bottom:1px solid var(--line)}
+.week-day-card>header b{font-size:12px;min-width:0}
+.week-day-card>header span{font-size:10px;color:var(--muted);white-space:nowrap}
+.week-day-card>header small{grid-column:1/-1;justify-self:start;color:var(--brand);background:#e7f5f1;border-radius:99px;padding:3px 8px;font-size:9px;font-weight:700}
+.week-day-bookings{display:flex;flex:1;flex-direction:column;gap:7px;padding:9px}
+.week-day-bookings>p{margin:auto;padding:18px 4px;color:#9aa9a3;font-size:10px;text-align:center}
+.week-booking{width:100%;min-width:0;display:block;padding:9px 10px;border:0;border-right:3px solid var(--card-color,#2582cc);border-radius:8px;background:var(--card-bg,#eaf4fd);color:var(--ink);text-align:right;transition:transform .16s,box-shadow .16s}
+.week-booking:hover,.week-booking.selected{transform:translateY(-1px);box-shadow:0 0 0 1px var(--card-color,#2582cc),0 5px 12px rgba(22,53,45,.09)}
+.week-booking b,.week-booking span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.week-booking b{font-size:10px;line-height:1.6}
+.week-booking span{margin-top:3px;font-size:9px;color:#58736b;line-height:1.5}
+@media(max-width:1250px){.week-overview{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:850px){.week-overview{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.week-day-card{min-height:190px}}
+@media(max-width:480px){.week-overview{grid-template-columns:minmax(0,1fr);gap:9px}.week-day-card{min-height:0}.week-day-card>header{padding:11px 12px}.week-day-bookings{padding:8px}.week-booking{padding:10px}.week-booking b{font-size:11px}.week-booking span{font-size:10px}}
