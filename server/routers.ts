@@ -3,7 +3,7 @@ import { bookingDateSchema } from "./validation";
 import { TRPCError } from "@trpc/server";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, userCanAccessTenant, userCanManageTenant } from "./db";
+import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, getTenantAccessContext, listEmployeeBookings, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, userCanAccessTenant, userCanManageTenant } from "./db";
 import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, sessionForUser } from "./localAuth";
 
 export const appRouter = router({
@@ -34,6 +34,14 @@ export const appRouter = router({
   }),
   workspace: router({
     current: protectedProcedure.query(({ ctx }) => getTenantForUser(ctx.user)),
+    accessContext: protectedProcedure.query(({ctx}) => getTenantAccessContext(ctx.user)),
+    employeeBookings: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),date:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),endDate:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional()})).query(async ({ctx,input}) => {
+      const access = await getTenantAccessContext(ctx.user);
+      if (!access || access.tenant.id !== input.tenantId || access.role !== "staff" || !access.staffId)
+        throw new TRPCError({code:"FORBIDDEN",message:"حساب الموظف غير مرتبط بملف موظف نشط في هذه الشركة"});
+      return listEmployeeBookings(input.tenantId,access.staffId,input.date,input.endDate);
+    }),
+
     smartSchedule: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),serviceId:z.number().int().positive(),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/)})).query(async ({ctx,input}) => {
       if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية إدارة جدول هذه الشركة"});
       try { return await getSmartScheduleSuggestions(input); }
