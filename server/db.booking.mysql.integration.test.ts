@@ -9,21 +9,22 @@ const integrationEnabled = process.env.RUN_MYSQL_INTEGRATION === "1" && Boolean(
 describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
   const connectionPromise = mysql.createConnection(databaseUrl!);
   let tenantId = 0;
+  const createdTenantIds: number[] = [];
   let staffId = 0;
   let serviceId = 0;
 
   afterAll(async () => {
     const connection = await connectionPromise;
-    if (tenantId) {
-      await connection.execute("DELETE FROM notifications WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM auditLogs WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM bookingItems WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM bookings WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM clients WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM staffWorkingHours WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM services WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM staff WHERE tenantId = ?", [tenantId]);
-      await connection.execute("DELETE FROM tenants WHERE id = ?", [tenantId]);
+    for (const cleanupTenantId of createdTenantIds) {
+      await connection.execute("DELETE FROM notifications WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM auditLogs WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM bookingItems WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM bookings WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM clients WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM staffWorkingHours WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM services WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM staff WHERE tenantId = ?", [cleanupTenantId]);
+      await connection.execute("DELETE FROM tenants WHERE id = ?", [cleanupTenantId]);
     }
     await connection.end();
   });
@@ -41,6 +42,7 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
       ["Concurrency Test Salon", slug],
     );
     tenantId = tenantResult.insertId;
+    createdTenantIds.push(tenantId);
 
     const [staffResult] = await connection.execute<mysql.ResultSetHeader>(
       "INSERT INTO staff (tenantId, name, role, active) VALUES (?, 'Test Stylist', 'Stylist', 1)",
@@ -67,6 +69,7 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
       staffId,
       date,
       startMinutes: 600,
+      idempotencyKey: randomUUID(),
     };
 
     const outcomes = await Promise.allSettled([
@@ -85,5 +88,42 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
       [tenantId, staffId, date, 600],
     );
     expect(rows).toHaveLength(1);
+  });
+
+  it("returns the original booking for a repeated idempotency key", async () => {
+    const connection = await connectionPromise;
+    const unique = randomUUID().replace(/-/g, "").slice(0, 20);
+    const slug = `retry-${unique}`;
+    const phone = `+9688${unique.slice(0, 7)}`;
+    const date = "2099-02-15";
+    const weekday = new Date(`${date}T00:00:00.000Z`).getUTCDay();
+    const [tenantResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO tenants (name, slug, status, city, countryCode, currency, timezone, defaultLanguage) VALUES (?, ?, 'trial', 'Muscat', 'OM', 'OMR', 'Asia/Muscat', 'en')",
+      ["Idempotency Test Salon", slug],
+    );
+    const previousTenantId = tenantId;
+    tenantId = tenantResult.insertId;
+    const [staffResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO staff (tenantId, name, role, active) VALUES (?, 'Test Stylist', 'Stylist', 1)", [tenantId],
+    );
+    staffId = staffResult.insertId;
+    const [serviceResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO services (tenantId, name, category, durationMinutes, price, active) VALUES (?, 'Test Service', 'Test', 30, 1000, 1)", [tenantId],
+    );
+    serviceId = serviceResult.insertId;
+    await connection.execute(
+      "INSERT INTO staffWorkingHours (tenantId, staffId, weekday, openMinutes, closeMinutes, active) VALUES (?, ?, ?, 0, 1440, 1)",
+      [tenantId, staffId, weekday],
+    );
+    const payload = { slug, clientName:"Retry Client", phone, serviceId, staffId, date, startMinutes:600, idempotencyKey:randomUUID() };
+    const first = await createPublicBooking(payload);
+    const retry = await createPublicBooking(payload);
+    expect(retry).toEqual(first);
+    await expect(createPublicBooking({ ...payload, clientName:"Different Client" })).rejects.toThrow("مفتاح الحجز مستخدم لبيانات مختلفة");
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT id FROM bookings WHERE tenantId = ? AND idempotencyKey = ?", [tenantId, payload.idempotencyKey],
+    );
+    expect(rows).toHaveLength(1);
+    tenantId = previousTenantId;
   });
 });

@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clients, expenses, notifications, services, staff, staffInvites, staffTimeOff, staffWorkingHours, tenants, tenantMembers, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -369,13 +369,22 @@ export async function getPublicBookingSlotsByStaff(input: { slug: string; servic
   })));
 }
 
-export async function createPublicBooking(input: {slug:string; clientName:string; phone:string; serviceId:number; serviceIds?:number[]; staffId:number; date:string; startMinutes:number; note?:string}) {
+export async function createPublicBooking(input: {slug:string; clientName:string; phone:string; serviceId:number; serviceIds?:number[]; staffId:number; date:string; startMinutes:number; note?:string; idempotencyKey:string}) {
+  const normalizedRequest = { slug:input.slug, clientName:input.clientName.trim(), phone:input.phone.trim(), serviceIds:Array.from(new Set(input.serviceIds?.length ? input.serviceIds : [input.serviceId])), staffId:input.staffId, date:input.date, startMinutes:input.startMinutes, note:input.note ?? "" };
+  const requestHash = createHash("sha256").update(JSON.stringify(normalizedRequest)).digest("hex");
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   return db.transaction(async tx => {
   await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug,input.slug)).for("update");
 
   const tenantRows = await tx.select().from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
   const tenant = tenantRows[0]; if (!tenant) throw new Error("Company not found");
+  const previousRows = await tx.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.idempotencyKey, input.idempotencyKey))).limit(1);
+  if (previousRows[0]) {
+    const previous = previousRows[0];
+    if (previous.requestHash !== requestHash) throw new Error("مفتاح الحجز مستخدم لبيانات مختلفة؛ أعد تحميل الصفحة وحاول مجددًا");
+    const previousItems = await tx.select({name:services.name}).from(bookingItems).innerJoin(services, eq(bookingItems.serviceId, services.id)).where(and(eq(bookingItems.tenantId, tenant.id), eq(bookingItems.bookingId, previous.id)));
+    return { id:previous.id, bookingId:previous.id, tenantId:tenant.id, tenantName:tenant.name, serviceName:previousItems.map(item=>item.name).join(" + "), totalDuration:previous.durationMinutes, totalPrice:previous.totalPrice };
+  }
    if (!isTenantPublicBookingEnabled(tenant.status)) throw new Error("الحجوزات العامة متوقفة لهذا النشاط");
   const ids = Array.from(new Set(input.serviceIds?.length ? input.serviceIds : [input.serviceId]));
   const serviceRows = await tx.select().from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1)));
@@ -403,7 +412,7 @@ export async function createPublicBooking(input: {slug:string; clientName:string
     const result = await tx.insert(clients).values({tenantId:tenant.id, name:input.clientName, phone:input.phone, visits:0, totalSpent:0, lastVisit:input.date});
     clientId = Number(result[0].insertId);
   }
-  const result = await tx.insert(bookings).values({tenantId:tenant.id, clientId, staffId:input.staffId, serviceId:selectedServices[0].id, date:input.date, startMinutes:input.startMinutes, durationMinutes:totalDuration, totalPrice, status:"new", source:"online", paid:0, note:input.note ?? null});
+  const result = await tx.insert(bookings).values({tenantId:tenant.id, clientId, staffId:input.staffId, serviceId:selectedServices[0].id, date:input.date, startMinutes:input.startMinutes, durationMinutes:totalDuration, totalPrice, status:"new", source:"online", paid:0, note:input.note ?? null, idempotencyKey:input.idempotencyKey, requestHash});
   const bookingId = Number(result[0].insertId);
   await tx.insert(bookingItems).values(selectedServices.map(item => ({tenantId:tenant.id,bookingId,serviceId:item.id,staffId:input.staffId,durationMinutes:item.durationMinutes,price:item.price})));
   await tx.insert(auditLogs).values({tenantId:tenant.id,actorUserId:null,action:"booking.created",entity:"booking",entityId:bookingId});
