@@ -6,12 +6,25 @@ import { passwordResets, users } from "../drizzle/schema";
 
 const SESSION_COOKIE = "clientora_session";
 const SESSION_TTL = 1000 * 60 * 60 * 24 * 30;
-const secret = () => process.env.AUTH_SESSION_SECRET || process.env.MANUS_JWT_SECRET || "clientora-development-secret-change-me";
+const secret = () => {
+  const value = process.env.AUTH_SESSION_SECRET || process.env.MANUS_JWT_SECRET;
+  if (!value || value.length < 32) throw new Error("AUTH_SESSION_SECRET must be configured with at least 32 characters");
+  return value;
+};
 const hash = (value: string) => crypto.createHash("sha256").update(value).digest("hex");
 const passwordHash = async (password: string, salt = crypto.randomBytes(16).toString("hex")) => new Promise<string>((resolve, reject) => crypto.scrypt(password, salt, 64, (error, derived) => error ? reject(error) : resolve(`${salt}:${derived.toString("hex")}`)));
-const verifyPassword = async (password: string, stored: string) => { const [salt, expected] = stored.split(":"); if (!salt || !expected) return false; const actual = await passwordHash(password, salt); return crypto.timingSafeEqual(Buffer.from(actual.split(":")[1], "hex"), Buffer.from(expected, "hex")); };
+const verifyPassword = async (password: string, stored: string) => {
+  const [salt, expected] = stored.split(":");
+  if (!salt || !expected || !/^[a-f0-9]{128}$/i.test(expected)) return false;
+  const actual = await passwordHash(password, salt);
+  const actualBytes = Buffer.from(actual.split(":")[1], "hex");
+  const expectedBytes = Buffer.from(expected, "hex");
+  return actualBytes.length === expectedBytes.length && crypto.timingSafeEqual(actualBytes, expectedBytes);
+};
 const sign = (userId: number, expires: number) => { const payload = `${userId}.${expires}`; const signature = crypto.createHmac("sha256", secret()).update(payload).digest("base64url"); return `${payload}.${signature}`; };
-const readSession = (token?: string) => { if (!token) return null; const [id, expires, signature] = token.split("."); const userId = Number(id); if (!userId || !expires || !signature || Number(expires) < Date.now()) return null; const expected = crypto.createHmac("sha256", secret()).update(`${id}.${expires}`).digest("base64url"); return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected)) ? userId : null; };
+const readSession = (token?: string) => { if (!token) return null; const [id, expires, signature] = token.split("."); const userId = Number(id); if (!userId || !expires || !signature || Number(expires) < Date.now()) return null; const expected = crypto.createHmac("sha256", secret()).update(`${id}.${expires}`).digest("base64url"); const supplied = Buffer.from(signature);
+  const calculated = Buffer.from(expected);
+  return supplied.length === calculated.length && crypto.timingSafeEqual(supplied, calculated) ? userId : null; };
 export const localSessionCookie = SESSION_COOKIE;
 export function sessionForUser(userId: number) { return sign(userId, Date.now() + SESSION_TTL); }
 export function userIdFromSession(token?: string) { return readSession(token); }
