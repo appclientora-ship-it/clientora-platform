@@ -98,7 +98,9 @@ export default function Home() {
   const tenantId = workspaceQuery.data?.id;
   const bookingsQuery = trpc.workspace.bookings.useQuery({tenantId:tenantId ?? 0,date:isoDate(displayDate)},{enabled:Boolean(tenantId)});
   const staffQuery = trpc.workspace.staff.useQuery({tenantId:tenantId ?? 0},{enabled:Boolean(tenantId)});
-  const servicesQuery = trpc.workspace.services.useQuery({tenantId:tenantId ?? 0},{enabled:Boolean(tenantId)});\n  const createServiceMutation = trpc.workspace.createService.useMutation({onSuccess:()=>{servicesQuery.refetch();setNewServiceOpen(false);notify("تمت إضافة الخدمة وحفظها");},onError:error=>notify(error.message)});\n  const updateServiceMutation = trpc.workspace.updateService.useMutation({onSuccess:()=>{servicesQuery.refetch();setEditEntity(null);notify("تم حفظ تعديلات الخدمة");},onError:error=>notify(error.message)});
+  const servicesQuery = trpc.workspace.services.useQuery({tenantId:tenantId ?? 0},{enabled:Boolean(tenantId)});
+  const createServiceMutation = trpc.workspace.createService.useMutation({onSuccess:()=>{servicesQuery.refetch();setNewServiceOpen(false);notify("تمت إضافة الخدمة وحفظها");},onError:error=>notify(error.message)});
+  const updateServiceMutation = trpc.workspace.updateService.useMutation({onSuccess:()=>{servicesQuery.refetch();setEditEntity(null);notify("تم حفظ تعديلات الخدمة");},onError:error=>notify(error.message)});
   const addStaffMutation = trpc.workspace.addStaff.useMutation({onSuccess:()=>{staffQuery.refetch();setEditEntity(null);notify("تمت إضافة الموظف");},onError:error=>notify(error.message)});
   const updateStaffMutation = trpc.workspace.updateStaff.useMutation({onSuccess:()=>{staffQuery.refetch();setEditEntity(null);notify("تم حفظ بيانات الموظف");},onError:error=>notify(error.message)});
   const notificationsQuery = trpc.workspace.notifications.useQuery({tenantId:tenantId ?? 0},{enabled:Boolean(tenantId),refetchInterval:30000});
