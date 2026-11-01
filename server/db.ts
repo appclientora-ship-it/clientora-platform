@@ -385,11 +385,10 @@ export async function getPublicBookingSlots(input: { slug: string; staffId: numb
   const durationMinutes = selectedServices.reduce((sum, item) => sum + item.durationMinutes, 0);
   if (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > 480) return [];
   const weekday = new Date(input.date + "T00:00:00Z").getUTCDay();
-  const [hoursRows, existingBookings, timeOffRows] = await Promise.all([
+  const [hoursRows, existingBookings, timeOffRows, breaksRows] = await Promise.all([
     db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId, tenant.id), eq(staffWorkingHours.staffId, input.staffId), eq(staffWorkingHours.weekday, weekday), eq(staffWorkingHours.active, 1))),
     db.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date))),
     db.select().from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenant.id),eq(staffTimeOff.staffId,input.staffId),eq(staffTimeOff.date,input.date))),
- ,
     db.select({startMinutes:staffBreaks.startMinutes,endMinutes:staffBreaks.endMinutes}).from(staffBreaks).where(and(eq(staffBreaks.tenantId,tenant.id),eq(staffBreaks.staffId,input.staffId),eq(staffBreaks.weekday,weekday),eq(staffBreaks.active,1))),
   ]);
   const hours = hoursRows[0];
