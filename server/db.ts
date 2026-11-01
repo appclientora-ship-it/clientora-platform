@@ -262,6 +262,16 @@ export async function getPublicBookingSlots(input: { slug: string; staffId: numb
   });
 }
 
+export async function getPublicBookingSlotsByStaff(input: { slug: string; serviceIds: number[]; date: string }) {
+  const catalog = await getPublicBookingCatalog(input.slug);
+  if (!catalog || !input.serviceIds.length) return [];
+  return Promise.all(catalog.staff.map(async member => ({
+    id: member.id, name: member.name, role: member.role, color: member.color,
+    photoUrl: member.photoUrl, rating: member.rating, reviewCount: member.reviewCount,
+    slots: await getPublicBookingSlots({ slug: input.slug, staffId: member.id, serviceIds: input.serviceIds, date: input.date }),
+  })));
+}
+
 export async function createPublicBooking(input: {slug:string; clientName:string; phone:string; serviceId:number; serviceIds?:number[]; staffId:number; date:string; startMinutes:number; note?:string}) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   return db.transaction(async tx => {
