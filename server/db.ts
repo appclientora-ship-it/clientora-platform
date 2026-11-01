@@ -54,6 +54,23 @@ export async function listBookings(tenantId: number, date: string) {
   const db = await getDb();
   return db ? db.select().from(bookings).where(and(eq(bookings.tenantId, tenantId), eq(bookings.date, date))).orderBy(bookings.startMinutes) : [];
 }
+export async function listTenantClients(tenantId:number) {
+  const db=await getDb(); if(!db) return [];
+  const rows=await db.select().from(clients).where(eq(clients.tenantId,tenantId)).orderBy(clients.name);
+  return rows;
+}
+export async function getTenantClientProfile(tenantId:number,clientId:number) {
+  const db=await getDb(); if(!db) throw new Error("Database is not available");
+  const client=(await db.select().from(clients).where(and(eq(clients.id,clientId),eq(clients.tenantId,tenantId))).limit(1))[0];
+  if(!client) throw new Error("العميل غير موجود في هذه الشركة");
+  const rows=await db.select({booking:bookings,service:services,staff}).from(bookings)
+    .innerJoin(services,and(eq(bookings.serviceId,services.id),eq(services.tenantId,tenantId)))
+    .innerJoin(staff,and(eq(bookings.staffId,staff.id),eq(staff.tenantId,tenantId)))
+    .where(and(eq(bookings.tenantId,tenantId),eq(bookings.clientId,clientId)))
+    .orderBy(desc(bookings.date),desc(bookings.startMinutes));
+  const history=rows.map(row=>({...row.booking,serviceName:row.service.name,staffName:row.staff.name}));
+  return {client,bookings:history,visitCount:history.filter(item=>item.status==="completed").length,paidTotal:history.filter(item=>item.paid===1).reduce((sum,item)=>sum+item.totalPrice,0)};
+}
 export async function listDetailedBookings(tenantId:number,date:string) {
   const db = await getDb(); if (!db) return [];
   const rows = await db.select({booking:bookings, client:clients, service:services, staff}).from(bookings)
