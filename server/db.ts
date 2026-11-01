@@ -65,6 +65,16 @@ export function isTenantPublicBookingEnabled(status: "active" | "trial" | "suspe
   return status !== "suspended";
 }
 
+export function isValidTenantTimeZone(timeZone: string): boolean {
+  if (!timeZone || timeZone.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date(0));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function isBookingStartInFuture(date: string, startMinutes: number, timeZone: string, now = new Date()): boolean {
   try {
     const dateParts = new Intl.DateTimeFormat("en-CA", {
@@ -340,7 +350,7 @@ export async function createBookingReview(input:{tenantId:number;bookingId:numbe
 }
 export async function listBookingReviews(tenantId:number) { const db=await getDb(); return db ? db.select().from(bookingReviews).where(eq(bookingReviews.tenantId,tenantId)).orderBy(desc(bookingReviews.createdAt)) : []; }
 export async function publishBookingReview(tenantId:number,reviewId:number,published:boolean) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(bookingReviews).set({published:published?1:0}).where(and(eq(bookingReviews.id,reviewId),eq(bookingReviews.tenantId,tenantId))); return (await db.select().from(bookingReviews).where(eq(bookingReviews.id,reviewId)).limit(1))[0]; }
-export async function updateTenantSettings(tenantId:number,input:{countryCode?:string;currency?:string;timezone?:string;defaultLanguage?:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); if (input.timezone !== undefined) { try { new Intl.DateTimeFormat("en-US", { timeZone: input.timezone }).format(new Date()); } catch { throw new Error("المنطقة الزمنية غير صحيحة؛ اختر منطقة زمنية معتمدة مثل Asia/Muscat"); } } await db.update(tenants).set(input).where(eq(tenants.id,tenantId)); return (await db.select().from(tenants).where(eq(tenants.id,tenantId)).limit(1))[0]; }
+export async function updateTenantSettings(tenantId:number,input:{countryCode?:string;currency?:string;timezone?:string;defaultLanguage?:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); if (input.timezone !== undefined && !isValidTenantTimeZone(input.timezone)) throw new Error("المنطقة الزمنية غير صحيحة؛ اختر منطقة زمنية معتمدة مثل Asia/Muscat"); await db.update(tenants).set(input).where(eq(tenants.id,tenantId)); return (await db.select().from(tenants).where(eq(tenants.id,tenantId)).limit(1))[0]; }
 export async function listTenantStaff(tenantId:number) { const db=await getDb(); return db ? db.select().from(staff).where(and(eq(staff.tenantId,tenantId),eq(staff.active,1))).orderBy(staff.id) : []; }
 export async function addStaff(tenantId:number,input:{name:string;role:string;photoUrl?:string;bio?:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(staff).values({tenantId,name:input.name,role:input.role,photoUrl:input.photoUrl||null,bio:input.bio||null}); return (await db.select().from(staff).where(eq(staff.id,Number(result[0].insertId))).limit(1))[0]; }
 export async function updateStaff(tenantId:number,staffId:number,input:{name?:string;role?:string;photoUrl?:string|null;bio?:string|null;active?:boolean}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(staff).set({...input,active:input.active===undefined?undefined:(input.active?1:0)}).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))); return (await db.select().from(staff).where(eq(staff.id,staffId)).limit(1))[0]; }
