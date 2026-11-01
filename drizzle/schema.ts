@@ -23,7 +23,7 @@ export const staff = mysqlTable("staff", {
 export const staffWorkingHours = mysqlTable("staffWorkingHours", {
   id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), staffId: int("staffId").notNull(), weekday: int("weekday").notNull(), openMinutes: int("openMinutes").notNull(), closeMinutes: int("closeMinutes").notNull(), active: int("active").default(1).notNull(),
 });
-export const staffInvites = mysqlTable("staffInvites", {
+export const staffTimeOff = mysqlTable("staffTimeOff", {\n  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), staffId: int("staffId").notNull(), date: varchar("date", { length: 10 }).notNull(), reason: varchar("reason", { length: 240 }), createdAt: timestamp("createdAt").defaultNow().notNull(),\n});\nexport const staffInvites = mysqlTable("staffInvites", {
   id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), staffId: int("staffId"), email: varchar("email", { length: 320 }), code: varchar("code", { length: 64 }).notNull().unique(), role: mysqlEnum("role", ["staff", "manager"]).default("staff").notNull(), expiresAt: timestamp("expiresAt").notNull(), acceptedAt: timestamp("acceptedAt"), createdByUserId: int("createdByUserId").notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export const services = mysqlTable("services", {

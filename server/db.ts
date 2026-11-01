@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clients, expenses, notifications, services, staff, staffInvites, staffWorkingHours, tenants, tenantMembers, users } from "../drizzle/schema";
+import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clients, expenses, notifications, services, staff, staffInvites, staffTimeOff, staffWorkingHours, tenants, tenantMembers, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -134,7 +134,7 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
   const movingAppointment = patch.date !== undefined || patch.staffId !== undefined || patch.startMinutes !== undefined || patch.durationMinutes !== undefined;
   if (movingAppointment && patch.status !== "cancelled") {
     const weekday = new Date(nextDate + "T00:00:00Z").getUTCDay();
-    const workingHours = await tx.select().from(staffWorkingHours).where(and(
+    const timeOff = await tx.select({id:staffTimeOff.id}).from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenantId),eq(staffTimeOff.staffId,nextStaffId),eq(staffTimeOff.date,nextDate))).limit(1);\n    if (timeOff.length) throw new Error("الموظف في إجازة في هذا اليوم");\n    const workingHours = await tx.select().from(staffWorkingHours).where(and(
       eq(staffWorkingHours.tenantId, tenantId),
       eq(staffWorkingHours.staffId, nextStaffId),
       eq(staffWorkingHours.weekday, weekday),
@@ -257,12 +257,13 @@ export async function getPublicBookingSlots(input: { slug: string; staffId: numb
   const durationMinutes = selectedServices.reduce((sum, item) => sum + item.durationMinutes, 0);
   if (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > 480) return [];
   const weekday = new Date(input.date + "T00:00:00Z").getUTCDay();
-  const [hoursRows, existingBookings] = await Promise.all([
+  const [hoursRows, existingBookings, timeOffRows] = await Promise.all([
     db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId, tenant.id), eq(staffWorkingHours.staffId, input.staffId), eq(staffWorkingHours.weekday, weekday), eq(staffWorkingHours.active, 1))),
     db.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date))),
+    db.select().from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenant.id),eq(staffTimeOff.staffId,input.staffId),eq(staffTimeOff.date,input.date))),
   ]);
   const hours = hoursRows[0];
-  if (!hours) return [];
+  if (!hours || timeOffRows.length) return [];
   return buildAvailableBookingSlots({
     weekday,
     openMinutes: hours.openMinutes,
@@ -341,6 +342,6 @@ export async function addStaff(tenantId:number,input:{name:string;role:string;ph
 export async function updateStaff(tenantId:number,staffId:number,input:{name?:string;role?:string;photoUrl?:string|null;bio?:string|null;active?:boolean}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(staff).set({...input,active:input.active===undefined?undefined:(input.active?1:0)}).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))); return (await db.select().from(staff).where(eq(staff.id,staffId)).limit(1))[0]; }
 export async function listStaffInvites(tenantId:number) { const db=await getDb(); return db ? db.select().from(staffInvites).where(eq(staffInvites.tenantId,tenantId)).orderBy(desc(staffInvites.createdAt)) : []; }
 export async function createStaffInvite(tenantId:number,createdByUserId:number,input:{email?:string;staffId?:number;role?:"staff"|"manager"}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const code=randomBytes(18).toString("hex"); const expiresAt=new Date(Date.now()+7*24*60*60*1000); const result=await db.insert(staffInvites).values({tenantId,createdByUserId,email:input.email||null,staffId:input.staffId||null,role:input.role||"staff",code,expiresAt}); return (await db.select().from(staffInvites).where(eq(staffInvites.id,Number(result[0].insertId))).limit(1))[0]; }
-export async function listStaffHours(tenantId:number,staffId:number) { const db=await getDb(); return db ? db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,tenantId),eq(staffWorkingHours.staffId,staffId))) : []; }
+export async function listStaffTimeOff(tenantId:number,staffId:number) { const db=await getDb(); return db ? db.select().from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenantId),eq(staffTimeOff.staffId,staffId))).orderBy(staffTimeOff.date) : []; }\nexport async function addStaffTimeOff(tenantId:number,staffId:number,date:string,reason?:string) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const member=await db.select({id:staff.id}).from(staff).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))).limit(1); if(!member[0]) throw new Error("Сотрудник не найден"); const existing=await db.select({id:staffTimeOff.id}).from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenantId),eq(staffTimeOff.staffId,staffId),eq(staffTimeOff.date,date))).limit(1); if(existing[0]) throw new Error("Для этого дня уже указана отгул"); await db.insert(staffTimeOff).values({tenantId,staffId,date,reason:reason?.trim()||null}); return listStaffTimeOff(tenantId,staffId); }\nexport async function deleteStaffTimeOff(tenantId:number,staffId:number,timeOffId:number) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.delete(staffTimeOff).where(and(eq(staffTimeOff.id,timeOffId),eq(staffTimeOff.tenantId,tenantId),eq(staffTimeOff.staffId,staffId))); return listStaffTimeOff(tenantId,staffId); }\nexport async function listStaffHours(tenantId:number,staffId:number) { const db=await getDb(); return db ? db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,tenantId),eq(staffWorkingHours.staffId,staffId))) : []; }
 export async function saveStaffHours(tenantId:number,staffId:number,weekday:number,openMinutes:number,closeMinutes:number,active:boolean) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const existing=await db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,tenantId),eq(staffWorkingHours.staffId,staffId),eq(staffWorkingHours.weekday,weekday))).limit(1); if(existing[0]) await db.update(staffWorkingHours).set({openMinutes,closeMinutes,active:active?1:0}).where(eq(staffWorkingHours.id,existing[0].id)); else await db.insert(staffWorkingHours).values({tenantId,staffId,weekday,openMinutes,closeMinutes,active:active?1:0}); return listStaffHours(tenantId,staffId); }
 export { bookings, clients, services, staff, tenants, tenantMembers };
