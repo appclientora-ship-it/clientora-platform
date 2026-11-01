@@ -64,7 +64,8 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
   const nextStaffId = patch.staffId ?? booking.staffId;
   const nextStart = patch.startMinutes ?? booking.startMinutes;
   const nextDuration = patch.durationMinutes ?? booking.durationMinutes;
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(nextDate) || Number.isNaN(Date.parse(nextDate + "T00:00:00Z"))) throw new Error("تاريخ الحجز غير صحيح");
+  const parsedNextDate = new Date(nextDate + "T00:00:00Z");
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(nextDate) || Number.isNaN(parsedNextDate.getTime()) || parsedNextDate.toISOString().slice(0,10) !== nextDate) throw new Error("تاريخ الحجز غير صحيح");
   if (!Number.isInteger(nextStart) || nextStart < 0 || nextStart > 1439) throw new Error("وقت بداية الحجز غير صحيح");
   if (!Number.isInteger(nextDuration) || nextDuration < 15 || nextDuration > 480) throw new Error("مدة الحجز يجب أن تكون بين 15 و480 دقيقة");
   const nextStaff = (await db.select({id:staff.id}).from(staff).where(and(eq(staff.id,nextStaffId),eq(staff.tenantId,tenantId),eq(staff.active,1))).limit(1))[0];
@@ -140,7 +141,8 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   if (selectedServices.length !== ids.length) throw new Error("Service not found");
   const totalDuration = selectedServices.reduce((sum,item)=>sum+item.durationMinutes,0); const totalPrice = selectedServices.reduce((sum,item)=>sum+item.price,0);
   if (!Number.isInteger(totalDuration) || totalDuration < 1 || totalDuration > 480) throw new Error("إجمالي مدة الخدمات يجب ألا يتجاوز 480 دقيقة");
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(input.date) || Number.isNaN(Date.parse(input.date + "T00:00:00Z"))) throw new Error("تاريخ الحجز غير صحيح");
+  const parsedBookingDate = new Date(input.date + "T00:00:00Z");
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(input.date) || Number.isNaN(parsedBookingDate.getTime()) || parsedBookingDate.toISOString().slice(0,10) !== input.date) throw new Error("تاريخ الحجز غير صحيح");
   if (!Number.isInteger(input.startMinutes) || input.startMinutes < 0 || input.startMinutes > 1439 || input.startMinutes + totalDuration > 1440) throw new Error("وقت الحجز خارج حدود اليوم");
   const staffRows = await db.select().from(staff).where(and(eq(staff.id, input.staffId), eq(staff.tenantId, tenant.id), eq(staff.active, 1))).limit(1);
   if (!staffRows[0]) throw new Error("Staff not found");
@@ -153,7 +155,7 @@ export async function createPublicBooking(input: {slug:string; clientName:string
     const result = await db.insert(clients).values({tenantId:tenant.id, name:input.clientName, phone:input.phone, visits:0, totalSpent:0, lastVisit:input.date});
     clientId = Number(result[0].insertId);
   }
-  const result = await db.insert(bookings).values({tenantId:tenant.id, clientId, staffId:input.staffId, serviceId:input.serviceId, date:input.date, startMinutes:input.startMinutes, durationMinutes:totalDuration, totalPrice, status:"new", source:"online", paid:0, note:input.note ?? null});
+  const result = await db.insert(bookings).values({tenantId:tenant.id, clientId, staffId:input.staffId, serviceId:selectedServices[0].id, date:input.date, startMinutes:input.startMinutes, durationMinutes:totalDuration, totalPrice, status:"new", source:"online", paid:0, note:input.note ?? null});
   const bookingId = Number(result[0].insertId);
   await db.insert(bookingItems).values(selectedServices.map(item => ({tenantId:tenant.id,bookingId,serviceId:item.id,staffId:input.staffId,durationMinutes:item.durationMinutes,price:item.price})));
   await db.insert(auditLogs).values({tenantId:tenant.id,actorUserId:null,action:"booking.created",entity:"booking",entityId:bookingId});
