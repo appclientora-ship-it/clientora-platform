@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS `telegramLinks` (
   UNIQUE KEY `telegramLinks_telegram_user_unique` (`telegramUserId`),
   KEY `telegramLinks_user_id_idx` (`userId`)
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS `telegramLinkTokens` (
   `id` int NOT NULL AUTO_INCREMENT,
   `userId` int NOT NULL,
