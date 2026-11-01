@@ -52,7 +52,7 @@ export async function handleTelegramWebhook(req: Request, res: Response): Promis
 
   try {
     if (text.startsWith("/start")) {
-      const code = text.split(/\\s+/, 2)[1];
+      const code = text.split(/\s+/, 2)[1];
       if (!code || code.length < 20 || code.length > 100) {
         await sendTelegramMessage(chatId!, "أهلًا بك في مساعد Clientora. لربط حسابك، أنشئ رمز الربط من داخل حسابك في Clientora ثم أرسل /start متبوعًا بالرمز.");
         return;
