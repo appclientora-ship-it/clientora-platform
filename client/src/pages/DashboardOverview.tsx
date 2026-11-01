@@ -1,0 +1,80 @@
+import { useMemo } from "react";
+import { Bell, CalendarDays, Clock3, CreditCard, Sparkles, Users, TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { trpc } from "@/lib/trpc";
+
+type BookingRow = {
+  id: number; date: string; clientName: string; clientPhone: string; serviceName: string;
+  staffId: number; startMinutes: number; durationMinutes: number; price: number;
+  status: "new" | "confirmed" | "arrived" | "completed" | "cancelled" | "no_show";
+  paid: number; note: string | null;
+};
+
+const pad = (value:number) => String(value).padStart(2,"0");
+const timeLabel = (value:number) => `${pad(Math.floor(value/60))}:${pad(value%60)}`;
+const dateInZone = (date:Date, timezone:string) => {
+  const parts = new Intl.DateTimeFormat("en-CA",{timeZone:timezone,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(date);
+  const values = Object.fromEntries(parts.map(part=>[part.type,part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+};
+const addDays = (iso:string, days:number) => {
+  const date = new Date(iso+"T12:00:00Z"); date.setUTCDate(date.getUTCDate()+days); return date.toISOString().slice(0,10);
+};
+const weekdays = ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+
+export default function DashboardOverview({tenantId,timezone,currency,workspaceName}:{tenantId?:number;timezone:string;currency:string;workspaceName:string}) {
+  const today = dateInZone(new Date(),timezone);
+  const endDate = addDays(today,6);
+  const query = trpc.workspace.bookings.useQuery(
+    {tenantId:tenantId??0,date:today,endDate},
+    {enabled:Boolean(tenantId),refetchInterval:60000}
+  );
+  const rows = (query.data ?? []) as BookingRow[];
+  const todayRows = useMemo(()=>rows.filter(row=>row.date===today),[rows,today]);
+  const activeToday = todayRows.filter(row=>row.status!=="cancelled");
+  const paidRevenue = todayRows.filter(row=>Boolean(row.paid)).reduce((sum,row)=>sum+Number(row.price||0),0);
+  const uniqueClients = new Set(todayRows.map(row=>row.clientPhone||row.clientName)).size;
+  const noShowCount = todayRows.filter(row=>row.status==="no_show").length;
+  const noShowRate = activeToday.length ? (noShowCount/activeToday.length)*100 : 0;
+  const chartData = useMemo(()=>Array.from({length:7},(_,index)=>{
+    const date=addDays(today,index);
+    const count=rows.filter(row=>row.date===date&&row.status!=="cancelled").length;
+    return {day:weekdays[new Date(date+"T12:00:00Z").getUTCDay()],bookings:count};
+  }),[rows,today]);
+  const demandData = useMemo(()=>[9,12,15,18,21].map(hour=>({
+    time:hour===12?"12م":hour>12?`${hour-12}م`:`${hour}ص`,
+    count:rows.filter(row=>row.date===today&&Math.floor(row.startMinutes/60)>=hour&&Math.floor(row.startMinutes/60)<hour+3&&row.status!=="cancelled").length
+  })),[rows,today]);
+  const peak = [...demandData].sort((a,b)=>b.count-a.count)[0];
+  const nowMinutes = (()=>{const parts=new Intl.DateTimeFormat("en-GB",{timeZone:timezone,hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date()).split(":").map(Number);return parts[0]*60+parts[1];})();
+  const upcoming = [...todayRows].filter(row=>row.startMinutes>=nowMinutes&&row.status!=="cancelled").sort((a,b)=>a.startMinutes-b.startMinutes).slice(0,5);
+  const dateLabel = new Intl.DateTimeFormat("ar",{timeZone:timezone,weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(new Date());
+  const money = (value:number)=>new Intl.NumberFormat("ar-OM",{minimumFractionDigits:0,maximumFractionDigits:2}).format(value)+" "+currency;
+
+  return <div className="clientora-dashboard">
+    <div className="dashboard-heading">
+      <div><span className="dashboard-eyebrow"><span className="dashboard-live-dot"/> {dateLabel}</span><h1>أهلاً بك 👋</h1><p>إليك ملخص أداء <b>{workspaceName}</b> اليوم.</p></div>
+      <div className="dashboard-date"><CalendarDays size={18}/>{dateLabel}</div>
+    </div>
+    {query.isLoading ? <div className="dashboard-loading">جارٍ تحميل بيانات لوحة التحكم...</div> : query.isError ? <div className="dashboard-empty">تعذر تحميل بيانات لوحة التحكم. حاول تحديث الصفحة.</div> : <>
+      <div className="dashboard-kpis">
+        <article className="dashboard-kpi"><div className="kpi-icon purple"><CalendarDays/></div><div><span>حجوزات اليوم</span><strong>{todayRows.length}</strong><small>الحجوزات المسجلة اليوم</small></div></article>
+        <article className="dashboard-kpi"><div className="kpi-icon green"><Users/></div><div><span>العملاء اليوم</span><strong>{uniqueClients}</strong><small>عملاء لديهم حجز اليوم</small></div></article>
+        <article className="dashboard-kpi"><div className="kpi-icon violet"><CreditCard/></div><div><span>الإيراد المحصّل</span><strong>{money(paidRevenue)}</strong><small>من الحجوزات المدفوعة اليوم</small></div></article>
+        <article className="dashboard-kpi"><div className="kpi-icon pink"><TrendingUp/></div><div><span>عدم الحضور</span><strong>{noShowRate.toFixed(1)}%</strong><small>{noShowCount} حجز لم يحضر</small></div></article>
+      </div>
+      <div className="dashboard-analytics">
+        <section className="dashboard-panel bookings-chart-panel"><div className="dashboard-panel-heading"><div><h2>نظرة على الحجوزات</h2><p>الحجوزات خلال الأيام السبعة القادمة</p></div><span className="chart-legend"><i/> الحجوزات</span></div>
+          {rows.length===0?<div className="dashboard-chart-empty">لا توجد حجوزات مسجلة في هذه الفترة حتى الآن.</div>:<div className="dashboard-chart"><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData} margin={{top:12,right:8,left:-18,bottom:0}}><defs><linearGradient id="bookingFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7545e8" stopOpacity={0.24}/><stop offset="95%" stopColor="#7545e8" stopOpacity={0.02}/></linearGradient></defs><CartesianGrid stroke="#eeeaf8" vertical={false}/><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill:"#7b7890",fontSize:11}}/><YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill:"#9692a8",fontSize:10}}/><Tooltip contentStyle={{borderRadius:12,border:"1px solid #eeeaf8",fontSize:12}}/><Area type="monotone" dataKey="bookings" name="الحجوزات" stroke="#7545e8" strokeWidth={3} fill="url(#bookingFill)" activeDot={{r:5}}/></AreaChart></ResponsiveContainer></div>}
+        </section>
+        <section className="dashboard-panel demand-panel"><div className="dashboard-panel-heading"><div><h2>أوقات الطلب</h2><p>توزيع الحجوزات حسب وقت البداية اليوم</p></div><span className="demand-bolt"><Sparkles size={17}/></span></div><div className="peak-summary"><div><small>أكثر فترة ازدحاماً</small><strong>{peak?.count ? peak.time : "لا توجد بيانات"}</strong></div><div><small>عدد الحجوزات</small><strong>{peak?.count ?? 0}</strong></div></div><div className="demand-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={demandData} margin={{top:4,right:0,left:-24,bottom:0}}><CartesianGrid stroke="#f0edf7" vertical={false}/><XAxis dataKey="time" axisLine={false} tickLine={false} tick={{fill:"#8d899e",fontSize:10}}/><YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill:"#aaa6b6",fontSize:9}}/><Tooltip contentStyle={{borderRadius:10,border:"1px solid #eeeaf8",fontSize:11}}/><Bar dataKey="count" name="الحجوزات" fill="#a58af5" radius={[6,6,0,0]} maxBarSize={25}/></BarChart></ResponsiveContainer></div></section>
+      </div>
+      <div className="dashboard-bottom-grid">
+        <section className="dashboard-panel upcoming-panel"><div className="dashboard-panel-heading"><div><h2>المواعيد القادمة</h2><p>حجوزات اليوم التي لم يحن موعدها بعد</p></div><span className="upcoming-count">{upcoming.length}</span></div>
+          {upcoming.length ? <div className="upcoming-list">{upcoming.map((row,index)=><div className="upcoming-row" key={row.id}><div className={`upcoming-avatar avatar-${index%4}`}>{row.clientName?.slice(0,1)||"؟"}</div><div className="upcoming-client"><strong>{row.clientName}</strong><span>{row.serviceName}</span></div><div className="upcoming-time"><Clock3 size={14}/>{timeLabel(row.startMinutes)}</div><span className={`upcoming-status status-${row.status}`}>{row.status==="confirmed"?"مؤكد":row.status==="arrived"?"حضر":row.status==="completed"?"مكتمل":row.status==="no_show"?"لم يحضر":"جديد"}</span></div>)}</div> : <div className="dashboard-chart-empty">لا توجد مواعيد قادمة اليوم.</div>}
+        </section>
+        <section className="dashboard-promo"><div className="promo-glow"/><span className="promo-tag"><Sparkles size={14}/> Clientora</span><h2>إدارة أذكى.<br/>تجربة أجمل.</h2><p>كل حجوزاتك وفريقك وعملاؤك في مكان واحد.</p><div className="promo-stats"><span><b>{rows.filter(row=>row.status!=="cancelled").length}</b> حجوزات هذا الأسبوع</span><span><b>{new Set(rows.map(row=>row.clientPhone||row.clientName)).size}</b> عملاء</span></div></section>
+      </div>
+    </>}
+  </div>;
+}
