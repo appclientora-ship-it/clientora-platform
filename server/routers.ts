@@ -70,9 +70,9 @@ export const appRouter = router({
       try { return await addTenantClientNote(input.tenantId,input.clientId,ctx.user.id,input.note); }
       catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر حفظ الملاحظة"}); }
     }),
-    bookings: protectedProcedure.input(z.object({ tenantId: z.number(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })).query(async ({ ctx, input }) => {
+    bookings: protectedProcedure.input(z.object({ tenantId: z.number(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).refine(value => !value.endDate || value.endDate >= value.date, {message:"نهاية الفترة يجب ألا تسبق بدايتها"}).refine(value => !value.endDate || (Date.parse(value.endDate+"T00:00:00Z")-Date.parse(value.date+"T00:00:00Z")) <= 6*86400000, {message:"الفترة القصوى سبعة أيام"})).query(async ({ ctx, input }) => {
       if (!(await userCanAccessTenant(ctx.user, input.tenantId))) throw new TRPCError({ code: "FORBIDDEN", message: "لا تملك صلاحية الوصول إلى هذه الشركة" });
-      return listDetailedBookings(input.tenantId, input.date);
+      return listDetailedBookings(input.tenantId, input.date, input.endDate);
     }),
     createBooking: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),clientName:z.string().trim().min(2).max(160),phone:z.string().trim().min(5).max(40),serviceId:z.number().int().positive(),staffId:z.number().int().positive(),date:bookingDateSchema,startMinutes:z.number().int().min(0).max(1439),note:z.string().max(500).optional(),paid:z.boolean().optional()})).mutation(async ({ctx,input}) => {
       if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية إنشاء الحجوزات في هذه الشركة"});
