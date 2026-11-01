@@ -163,7 +163,7 @@ function NewBookingModal({onClose,onCreate,staff,services,initialDate,tenantId,p
   const [time,setTime]=useState(600);
   const [paid,setPaid]=useState(false);
   const [note,setNote]=useState("");
-  const smartSchedule = trpc.workspace.smartSchedule.useQuery({tenantId,serviceId,date},{enabled:tenantId>0&&serviceId>0&&/^\\d{4}-\\d{2}-\\d{2}$/.test(date)});
+  const smartSchedule = trpc.workspace.smartSchedule.useQuery({tenantId,serviceId,date},{enabled:tenantId>0&&serviceId>0&&/^\d{4}-\d{2}-\d{2}$/.test(date)});
   const service=services.find(item=>item.id===serviceId);
   const suggestions=smartSchedule.data ?? [];
   return <Modal title="إنشاء حجز جديد" subtitle="اختر الخدمة والتاريخ لعرض الأوقات والموظفين المتاحين" onClose={onClose}><div className="modal-form">
