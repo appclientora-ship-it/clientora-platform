@@ -1,14 +1,29 @@
-# BookingHub — منصة إدارة الحجوزات
+# Clientora — منصة إدارة الحجوزات
 
-React / Express / tRPC / Drizzle starter, adapted from the Sandbox web-db-user template.
+Clientora is a standalone booking and salon-management application built with React, Express, tRPC, Drizzle ORM, and MySQL.
 
-- `pnpm dev`: development server; honors `PORT` (default 3000).
-- `pnpm build` / `pnpm start`: build and serve `dist/index.js` and `dist/public/`.
-- `pnpm db:migrate`: apply checked-in migrations. `pnpm db:push`: generate and apply new schema changes.
-- `pnpm check` / `pnpm test`: types and application tests.
+## Commands
 
-Start with the Webdev skill's default-template guide. Platform login, storage, payments and service contracts live in its shared references; read the relevant capability before extending its helper.
+- `pnpm dev`: development server (default port 3000).
+- `pnpm build` / `pnpm start`: build and serve the production application.
+- `pnpm db:migrate`: apply checked-in database migrations.
+- `pnpm check`: run TypeScript checks.
+- `pnpm test`: run automated tests.
 
-`server/_core/publicConfig.ts` exposes only named public runtime values. Private keys stay server-side. The platform serves managed `/manus-storage/` assets; the application does not register a second proxy.
+## Runtime configuration
 
-Platform configuration is readable and editable through `webdev.config`. Default settings are initial values, not enforced constraints. The agent may modify the files, commands and configuration or follow the flexible guide for another stack.
+Required:
+- `DATABASE_URL`: MySQL connection URL.
+- `AUTH_SESSION_SECRET`: unique random secret of at least 32 characters.
+
+For image and file uploads:
+- `S3_BUCKET`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY`.
+- `S3_REGION` (defaults to `auto`).
+- `S3_ENDPOINT` for S3-compatible providers; leave empty for AWS S3.
+- `S3_FORCE_PATH_STYLE=true` only when required by the storage provider.
+
+Optional:
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`: outgoing email for password recovery.
+- `APP_URL`: public application URL used in password-recovery links.
+
+Authentication, sessions, and password recovery are implemented by Clientora. Object storage uses the S3 API directly. No Manus account, project ID, OAuth service, or Manus API key is required.
