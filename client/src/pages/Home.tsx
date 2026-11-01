@@ -82,7 +82,7 @@ export default function Home() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [selectedId, setSelectedId] = useState(1);
   const [dateOffset, setDateOffset] = useState(0);
-  const [currentMinute,setCurrentMinute] = useState(() => { const now=new Date(); return now.getHours()*60+now.getMinutes(); });
+  const [currentMinute,setCurrentMinute] = useState(0);
   const [view, setView] = useState<"day"|"week">("day");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Status | "all">("all");
@@ -100,7 +100,7 @@ export default function Home() {
   const [language,setLanguage] = useState<Language>(() => (typeof window !== "undefined" && (localStorage.getItem("clientora-language") as Language)) || "ar");
   const [country,setCountry] = useState(() => (typeof window !== "undefined" && localStorage.getItem("clientora-country")) || "OM");
   const today = useMemo(() => new Date(), []);
-  useEffect(() => { const tick=()=>{const now=new Date();setCurrentMinute(now.getHours()*60+now.getMinutes());};tick();const timer=window.setInterval(tick,30000);return()=>window.clearInterval(timer); }, []);
+  useEffect(() => { const tick=()=>{const parts=new Intl.DateTimeFormat("en-GB",{timeZone:workspaceQuery.data?.timezone ?? "Asia/Muscat",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date());const hour=Number(parts.find(part=>part.type==="hour")?.value ?? 0);const minute=Number(parts.find(part=>part.type==="minute")?.value ?? 0);setCurrentMinute(hour*60+minute);};tick();const timer=window.setInterval(tick,30000);return()=>window.clearInterval(timer); }, [workspaceQuery.data?.timezone]);
   const displayDate = useMemo(() => { const date = new Date(today); date.setDate(date.getDate() + dateOffset); return date; }, [today,dateOffset]);
   const workspaceQuery = trpc.workspace.current.useQuery();
   const tenantId = workspaceQuery.data?.id;
