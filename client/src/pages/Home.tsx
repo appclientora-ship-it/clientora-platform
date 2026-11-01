@@ -100,9 +100,9 @@ export default function Home() {
   const [language,setLanguage] = useState<Language>(() => (typeof window !== "undefined" && (localStorage.getItem("clientora-language") as Language)) || "ar");
   const [country,setCountry] = useState(() => (typeof window !== "undefined" && localStorage.getItem("clientora-country")) || "OM");
   const today = useMemo(() => new Date(), []);
-  useEffect(() => { const tick=()=>{const parts=new Intl.DateTimeFormat("en-GB",{timeZone:workspaceQuery.data?.timezone ?? "Asia/Muscat",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date());const hour=Number(parts.find(part=>part.type==="hour")?.value ?? 0);const minute=Number(parts.find(part=>part.type==="minute")?.value ?? 0);setCurrentMinute(hour*60+minute);};tick();const timer=window.setInterval(tick,30000);return()=>window.clearInterval(timer); }, [workspaceQuery.data?.timezone]);
   const displayDate = useMemo(() => { const date = new Date(today); date.setDate(date.getDate() + dateOffset); return date; }, [today,dateOffset]);
   const workspaceQuery = trpc.workspace.current.useQuery();
+  useEffect(() => { const tick=()=>{const parts=new Intl.DateTimeFormat("en-GB",{timeZone:workspaceQuery.data?.timezone ?? "Asia/Muscat",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date());const hour=Number(parts.find(part=>part.type==="hour")?.value ?? 0);const minute=Number(parts.find(part=>part.type==="minute")?.value ?? 0);setCurrentMinute(hour*60+minute);};tick();const timer=window.setInterval(tick,30000);return()=>window.clearInterval(timer); }, [workspaceQuery.data?.timezone]);
   const tenantId = workspaceQuery.data?.id;
   const selectedIsoDate = isoDate(displayDate,workspaceQuery.data?.timezone ?? "Asia/Muscat");
   const weekEndDate = (() => { const date = new Date(selectedIsoDate+"T12:00:00Z"); date.setUTCDate(date.getUTCDate()+6); return date.toISOString().slice(0,10); })();
