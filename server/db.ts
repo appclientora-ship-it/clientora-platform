@@ -486,6 +486,8 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   const staffHours = await tx.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId, tenant.id), eq(staffWorkingHours.staffId, input.staffId), eq(staffWorkingHours.weekday, weekday), eq(staffWorkingHours.active, 1))).limit(1);
   if (!isWithinStaffWorkingHours(weekday, input.startMinutes, totalDuration, staffHours)) throw new Error("الموعد خارج ساعات عمل الموظف");
   const existing = await tx.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date)));
+  const breakRows = await tx.select({startMinutes:staffBreaks.startMinutes,endMinutes:staffBreaks.endMinutes}).from(staffBreaks).where(and(eq(staffBreaks.tenantId,tenant.id),eq(staffBreaks.staffId,input.staffId),eq(staffBreaks.weekday,weekday),eq(staffBreaks.active,1)));
+  if (hasStaffBreakConflict(breakRows,{startMinutes:input.startMinutes,durationMinutes:totalDuration})) throw new Error("الموعد يتعارض مع فترة استراحة الموظف، اختر وقتاً آخر");
   const overlaps = hasBookingConflict(existing, {startMinutes:input.startMinutes, durationMinutes:totalDuration});
   if (overlaps) throw new Error("هذا الوقت محجوز بالفعل، اختر وقتاً آخر");
   const clientRows = await tx.select().from(clients).where(and(eq(clients.tenantId, tenant.id), eq(clients.phone, input.phone))).limit(1);
