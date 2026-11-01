@@ -32,11 +32,21 @@ try {
     .map((statement) => statement.trim())
     .filter(Boolean);
 
-  // First pass proves missing columns are added; second proves reruns are safe.
-  for (let pass = 1; pass <= 2; pass += 1) {
-    for (const statement of statements) {
-      await connection.query(statement);
+  // First pass proves missing columns are added.
+  for (const statement of statements) {
+    await connection.query(statement);
+  }
+
+  // Recreate a partially migrated schema: half the guarded columns exist,
+  // while the others are missing. The second pass must handle both states.
+  for (const [index, [table, column]] of columns.entries()) {
+    if (index % 2 === 1) {
+      await connection.query(`ALTER TABLE \`${table}\` DROP COLUMN \`${column}\``);
     }
+  }
+
+  for (const statement of statements) {
+    await connection.query(statement);
   }
 
   for (const [table, column] of columns) {
