@@ -75,6 +75,52 @@ export function isValidTenantTimeZone(timeZone: string): boolean {
   }
 }
 
+/**
+ * Returns true only when a tenant-local wall-clock start maps to exactly one instant.
+ * DST gaps map to zero instants; DST overlaps map to two and are deliberately rejected
+ * until bookings store an explicit UTC instant/offset.
+ */
+export function isUniqueLocalBookingStart(date: string, startMinutes: number, timeZone: string): boolean {
+  if (!isValidBookingDate(date) || !Number.isInteger(startMinutes) || startMinutes < 0 || startMinutes > 1439) return false;
+  try {
+    const [year, month, day] = date.split("-").map(Number);
+    const hour = Math.floor(startMinutes / 60);
+    const minute = startMinutes % 60;
+    const wallClockAsUtc = Date.UTC(year, month - 1, day, hour, minute);
+    const formatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    });
+    const offsets = new Set<number>();
+    for (let delta = -36; delta <= 36; delta += 6) {
+      const sample = wallClockAsUtc + delta * 60 * 60 * 1000;
+      const parts = formatter.formatToParts(new Date(sample));
+      const part = (type: string) => Number(parts.find(item => item.type === type)?.value ?? 0);
+      const representedAsUtc = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"));
+      offsets.add(representedAsUtc - sample);
+    }
+    let matches = 0;
+    for (const offset of offsets) {
+      const candidate = new Date(wallClockAsUtc - offset);
+      const parts = formatter.formatToParts(candidate);
+      const part = (type: string) => Number(parts.find(item => item.type === type)?.value ?? 0);
+      if (
+        part("year") === year && part("month") === month && part("day") === day &&
+        part("hour") === hour && part("minute") === minute && part("second") === 0
+      ) matches++;
+    }
+    return matches === 1;
+  } catch {
+    return false;
+  }
+}
+
 export function isBookingStartInFuture(date: string, startMinutes: number, timeZone: string, now = new Date()): boolean {
   try {
     const dateParts = new Intl.DateTimeFormat("en-CA", {
@@ -282,7 +328,7 @@ export async function getPublicBookingSlots(input: { slug: string; staffId: numb
     closeMinutes: hours.closeMinutes,
     durationMinutes,
     existingBookings,
-    isFuture: startMinutes => isBookingStartInFuture(input.date, startMinutes, tenant.timezone || "Asia/Muscat"),
+    isFuture: startMinutes => isUniqueLocalBookingStart(input.date, startMinutes, tenant.timezone || "Asia/Muscat") && isBookingStartInFuture(input.date, startMinutes, tenant.timezone || "Asia/Muscat"),
   });
 }
 
@@ -311,6 +357,7 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   const totalDuration = selectedServices.reduce((sum,item)=>sum+item.durationMinutes,0); const totalPrice = selectedServices.reduce((sum,item)=>sum+item.price,0);
   if (!Number.isInteger(totalDuration) || totalDuration < 1 || totalDuration > 480) throw new Error("إجمالي مدة الخدمات يجب ألا يتجاوز 480 دقيقة");
   if (!isValidBookingDate(input.date)) throw new Error("تاريخ الحجز غير صحيح");
+  if (!isUniqueLocalBookingStart(input.date, input.startMinutes, tenant.timezone || "Asia/Muscat")) throw new Error("هذا الوقت غير صالح بسبب تغيير التوقيت الصيفي؛ اختر موعدًا آخر");
   if (!isBookingStartInFuture(input.date, input.startMinutes, tenant.timezone || "Asia/Muscat")) throw new Error("اختر موعدًا في المستقبل حسب التوقيت المحلي للنشاط");
   if (!Number.isInteger(input.startMinutes) || input.startMinutes < 0 || input.startMinutes > 1439 || input.startMinutes + totalDuration > 1440) throw new Error("وقت الحجز خارج حدود اليوم");
   const staffRows = await tx.select().from(staff).where(and(eq(staff.id, input.staffId), eq(staff.tenantId, tenant.id), eq(staff.active, 1))).limit(1);
