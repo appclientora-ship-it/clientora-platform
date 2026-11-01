@@ -59,16 +59,34 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
   const rows = await db.select().from(bookings).where(and(eq(bookings.id,bookingId),eq(bookings.tenantId,tenantId))).limit(1); const booking = rows[0];
   if (!booking) throw new Error("الحجز غير موجود");
   if (patch.status === "cancelled" && booking.paid) throw new Error("لا يمكن إلغاء حجز مدفوع قبل معالجة الاسترجاع المالي");
+
+  const nextDate = patch.date ?? booking.date;
+  const nextStaffId = patch.staffId ?? booking.staffId;
+  const nextStart = patch.startMinutes ?? booking.startMinutes;
+  const nextDuration = patch.durationMinutes ?? booking.durationMinutes;
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(nextDate) || Number.isNaN(Date.parse(nextDate + "T00:00:00Z"))) throw new Error("تاريخ الحجز غير صحيح");
+  if (!Number.isInteger(nextStart) || nextStart < 0 || nextStart > 1439) throw new Error("وقت بداية الحجز غير صحيح");
+  if (!Number.isInteger(nextDuration) || nextDuration < 15 || nextDuration > 480) throw new Error("مدة الحجز يجب أن تكون بين 15 و480 دقيقة");
+  const nextStaff = (await db.select({id:staff.id}).from(staff).where(and(eq(staff.id,nextStaffId),eq(staff.tenantId,tenantId),eq(staff.active,1))).limit(1))[0];
+  if (!nextStaff) throw new Error("الموظف المحدد غير موجود أو غير نشط في هذا النشاط");
+
+  const movingAppointment = patch.date !== undefined || patch.staffId !== undefined || patch.startMinutes !== undefined || patch.durationMinutes !== undefined;
+  if (movingAppointment && patch.status !== "cancelled") {
+    const sameDay = await db.select().from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,nextStaffId),eq(bookings.date,nextDate)));
+    const conflict = sameDay.some(item => item.id !== bookingId && item.status !== "cancelled" && nextStart < item.startMinutes + item.durationMinutes && item.startMinutes < nextStart + nextDuration);
+    if (conflict) throw new Error("هذا الموظف لديه حجز آخر في الوقت المحدد، اختر وقتاً مختلفاً");
+  }
+
   const set: Partial<typeof bookings.$inferInsert> = {};
   if (patch.status !== undefined) set.status = patch.status;
   if (patch.status === "completed") set.completedAt = new Date();
   if (patch.paid !== undefined) set.paid = patch.paid ? 1 : 0;
   if (patch.note !== undefined) set.note = patch.note;
-  if (patch.durationMinutes !== undefined) set.durationMinutes = Math.max(15, Math.min(480, patch.durationMinutes));
-  if (patch.staffId !== undefined) set.staffId = patch.staffId;
-  if (patch.startMinutes !== undefined) set.startMinutes = Math.max(0, Math.min(1439, patch.startMinutes));
-  if (patch.date !== undefined) set.date = patch.date;
-  await db.update(bookings).set(set).where(eq(bookings.id,bookingId));
+  if (patch.durationMinutes !== undefined) set.durationMinutes = nextDuration;
+  if (patch.staffId !== undefined) set.staffId = nextStaffId;
+  if (patch.startMinutes !== undefined) set.startMinutes = nextStart;
+  if (patch.date !== undefined) set.date = nextDate;
+  await db.update(bookings).set(set).where(and(eq(bookings.id,bookingId),eq(bookings.tenantId,tenantId)));
   const action = patch.status === "cancelled" ? "booking.cancelled" : patch.status === "completed" ? "booking.completed" : patch.paid ? "booking.paid" : "booking.updated";
   await db.insert(auditLogs).values({tenantId,actorUserId,action,entity:"booking",entityId:bookingId});
   await db.insert(notifications).values({tenantId,recipientStaffId:booking.staffId,type:action,title:action === "booking.cancelled" ? "تم إلغاء حجز" : action === "booking.completed" ? "اكتملت الخدمة" : "تحديث على حجز",body:`تم تحديث حجز العميل رقم ${bookingId}.`,entity:"booking",entityId:bookingId});
@@ -121,10 +139,13 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   const selectedServices = ids.map(id => serviceRows.find(item => item.id === id)).filter(Boolean) as typeof serviceRows;
   if (selectedServices.length !== ids.length) throw new Error("Service not found");
   const totalDuration = selectedServices.reduce((sum,item)=>sum+item.durationMinutes,0); const totalPrice = selectedServices.reduce((sum,item)=>sum+item.price,0);
+  if (!Number.isInteger(totalDuration) || totalDuration < 1 || totalDuration > 480) throw new Error("إجمالي مدة الخدمات يجب ألا يتجاوز 480 دقيقة");
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(input.date) || Number.isNaN(Date.parse(input.date + "T00:00:00Z"))) throw new Error("تاريخ الحجز غير صحيح");
+  if (!Number.isInteger(input.startMinutes) || input.startMinutes < 0 || input.startMinutes > 1439 || input.startMinutes + totalDuration > 1440) throw new Error("وقت الحجز خارج حدود اليوم");
   const staffRows = await db.select().from(staff).where(and(eq(staff.id, input.staffId), eq(staff.tenantId, tenant.id), eq(staff.active, 1))).limit(1);
   if (!staffRows[0]) throw new Error("Staff not found");
   const existing = await db.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.staffId, input.staffId), eq(bookings.date, input.date)));
-  const overlaps = existing.some(item => item.status !== "cancelled" && item.startMinutes < input.startMinutes + totalDuration && input.startMinutes < item.startMinutes + totalDuration);
+  const overlaps = existing.some(item => item.status !== "cancelled" && item.startMinutes < input.startMinutes + totalDuration && input.startMinutes < item.startMinutes + item.durationMinutes);
   if (overlaps) throw new Error("هذا الوقت محجوز بالفعل، اختر وقتاً آخر");
   const clientRows = await db.select().from(clients).where(and(eq(clients.tenantId, tenant.id), eq(clients.phone, input.phone))).limit(1);
   let clientId = clientRows[0]?.id;
