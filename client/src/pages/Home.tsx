@@ -276,7 +276,8 @@ function ManagementView({active,tenantId,onNew,staff,services,bookings,onEditSta
 
 
 function StaffHoursModal({tenantId,staffId,staffName,onClose,onSaved}:{tenantId:number;staffId:number;staffName:string;onClose:()=>void;onSaved:()=>void}) {
-  const weekdays=["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+  const {t}=useLanguage();
+  const weekdays=["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"].map(day=>t(day));
   const defaults=()=>Object.fromEntries(weekdays.map((_,weekday)=>[weekday,{active:weekday!==5,openMinutes:600,closeMinutes:1320}])) as Record<number,{active:boolean;openMinutes:number;closeMinutes:number}>;
   const [schedule,setSchedule]=useState(defaults);
   const hoursQuery=trpc.workspace.staffHours.useQuery({tenantId,staffId});
@@ -323,6 +324,7 @@ function ReportsPanel({tenantId}:{tenantId?:number}) {
 }
 
 function EditEntityModal({kind,record,onClose,onSave}:{kind:"staff"|"service";record?:Staff|Service;onClose:()=>void;onSave:(value:Partial<Staff & Service>)=>void}) {
+  const {t}=useLanguage();
   const staffRecord = kind === "staff" ? record as Staff : undefined;
   const serviceRecord = kind === "service" ? record as Service : undefined;
   const [name,setName] = useState(record?.name ?? ""); const [role,setRole] = useState(staffRecord?.role ?? ""); const [category,setCategory] = useState(serviceRecord?.category ?? ""); const [duration,setDuration] = useState(serviceRecord?.duration ?? 60); const [price,setPrice] = useState(serviceRecord?.price ?? 60);
