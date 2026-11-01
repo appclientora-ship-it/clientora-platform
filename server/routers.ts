@@ -33,7 +33,7 @@ export const appRouter = router({
   }),
   workspace: router({
     current: protectedProcedure.query(({ ctx }) => getTenantForUser(ctx.user)),
-    smartSchedule: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),serviceId:z.number().int().positive(),date:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/)})).query(async ({ctx,input}) => {
+    smartSchedule: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),serviceId:z.number().int().positive(),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/)})).query(async ({ctx,input}) => {
       if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية إدارة جدول هذه الشركة"});
       try { return await getSmartScheduleSuggestions(input); }
       catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر اقتراح المواعيد المناسبة"}); }
