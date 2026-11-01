@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import mysql from "mysql2/promise";
 import { afterAll, describe, expect, it } from "vitest";
-import { createDashboardBooking, createPublicBooking } from "./db";
+import { consumeTelegramLinkCode, createDashboardBooking, createPublicBooking, createTelegramLinkCode } from "./db";
 
 const databaseUrl = process.env.DATABASE_URL;
 const integrationEnabled = process.env.RUN_MYSQL_INTEGRATION === "1" && Boolean(databaseUrl);
@@ -10,11 +10,16 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
   const connectionPromise = mysql.createConnection(databaseUrl!);
   let tenantId = 0;
   const createdTenantIds: number[] = [];
+  const telegramTestUsers: Array<{ userId: number; telegramUserId: string }> = [];
   let staffId = 0;
   let serviceId = 0;
 
   afterAll(async () => {
     const connection = await connectionPromise;
+    for (const telegramTestUser of telegramTestUsers) {
+      await connection.execute("DELETE FROM telegramLinks WHERE telegramUserId = ?", [telegramTestUser.telegramUserId]);
+      await connection.execute("DELETE FROM telegramLinkTokens WHERE userId = ?", [telegramTestUser.userId]);
+    }
     for (const cleanupTenantId of createdTenantIds) {
       await connection.execute("DELETE FROM notifications WHERE tenantId = ?", [cleanupTenantId]);
       await connection.execute("DELETE FROM auditLogs WHERE tenantId = ?", [cleanupTenantId]);
@@ -128,6 +133,29 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
     tenantId = previousTenantId;
   });
 
+
+  it("retries Telegram account linking safely after the token was consumed", async () => {
+    const connection = await connectionPromise;
+    const unique = randomUUID().replace(/-/g, "").slice(0, 20);
+    const userId = 1_000_000_000 + Math.floor(Math.random() * 900_000_000);
+    const telegramUserId = unique;
+    telegramTestUsers.push({ userId, telegramUserId });
+
+    const { code } = await createTelegramLinkCode(userId);
+    const first = await consumeTelegramLinkCode(code, telegramUserId);
+    const retry = await consumeTelegramLinkCode(code, telegramUserId);
+    const otherTelegramAccount = await consumeTelegramLinkCode(code, `other-${telegramUserId}`);
+
+    expect(first.success).toBe(true);
+    expect(retry.success).toBe(true);
+    expect(otherTelegramAccount.success).toBe(false);
+
+    const [links] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT id FROM telegramLinks WHERE userId = ? AND telegramUserId = ? AND revokedAt IS NULL",
+      [userId, telegramUserId],
+    );
+    expect(links).toHaveLength(1);
+  });
   it("prevents a public booking and a dashboard booking from reserving the same staff time", async () => {
     const connection = await connectionPromise;
     const unique = randomUUID().replace(/-/g, "").slice(0, 20);
