@@ -119,6 +119,7 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
     const first = await createPublicBooking(payload);
     const retry = await createPublicBooking(payload);
     expect(retry).toEqual(first);
+    await expect(createPublicBooking({ ...payload, clientName:"Different Client" })).rejects.toThrow("مفتاح الحجز مستخدم لبيانات مختلفة");
     const [rows] = await connection.execute<mysql.RowDataPacket[]>(
       "SELECT id FROM bookings WHERE tenantId = ? AND idempotencyKey = ?", [tenantId, payload.idempotencyKey],
     );
