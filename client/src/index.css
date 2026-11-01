@@ -36,3 +36,48 @@
 .insight-card p{font-size:12px;line-height:1.7;color:#526b63;margin:5px 0}
 .insight-card small{display:block;font-size:11px;line-height:1.7;color:#087e72}
 @media(max-width:640px){.business-intelligence{padding:14px}.business-intelligence .section-heading{align-items:flex-start}.insight-list{grid-template-columns:1fr}}
+
+
+/* Mobile-first schedule usability */
+@media(max-width:700px){
+  .app-shell{min-height:100dvh}
+  .main-area{width:100%;min-width:0}
+  .topbar{min-height:60px;gap:8px}
+  .topbar-actions{gap:8px}
+  .topbar-actions .primary-button{padding:9px 11px;font-size:11px;white-space:nowrap}
+  .content-area{min-width:0;padding:14px 10px 24px}
+  .page-head{margin-bottom:16px}
+  .page-head p{line-height:1.6}
+  .toolbar{gap:10px}
+  .date-controls{gap:5px;min-width:0}
+  .date-button{min-width:0;max-width:calc(100vw - 150px);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .toolbar-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;overflow:visible}
+  .toolbar-tools .search-box{grid-column:1/-1;width:100%;min-width:0}
+  .toolbar-tools .filter-select{min-width:0;width:100%}
+  .toolbar-tools .segmented{justify-self:end}
+  .toolbar-tools .booking-link{display:none}
+  .schedule-layout{display:block;min-height:0}
+  .calendar-card{width:100%;border-radius:12px}
+  .calendar-scroll{overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
+  .calendar-grid{min-width:max(100%,720px);grid-template-columns:58px repeat(var(--staff-count,1),minmax(145px,1fr))}
+  .corner-cell,.staff-head{height:64px}
+  .staff-head{gap:6px;padding:7px}
+  .staff-head .staff-avatar{width:27px;height:27px;flex:0 0 27px}
+  .staff-head b{font-size:10px}
+  .staff-head small{font-size:8px}
+  .staff-head .staff-menu{display:none}
+  .time-axis,.staff-column{height:760px}
+  .time-axis div{font-size:9px}
+  .booking-card{right:3px;left:3px;padding:6px 6px;border-radius:7px}
+  .booking-card b{font-size:10px}
+  .booking-card span{font-size:9px}
+  .booking-card small{font-size:8px}
+  .calendar-footer{display:flex;gap:12px;padding:11px 12px}
+  .calendar-footer .footer-hint{display:none}
+}
+@media(max-width:380px){
+  .topbar-actions .primary-button{padding:8px;font-size:10px}
+  .mobile-brand b{font-size:14px}
+  .content-area{padding-inline:8px}
+  .date-button{font-size:9px}
+}
