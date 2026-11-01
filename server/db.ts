@@ -426,17 +426,18 @@ export async function getSmartScheduleSuggestions(input:{tenantId:number;service
   const weekday=new Date(input.date+"T00:00:00.000Z").getUTCDay();
   const team=await db.select().from(staff).where(and(eq(staff.tenantId,input.tenantId),eq(staff.active,1)));
   const suggestions=await Promise.all(team.map(async member=>{
-    const [hoursRows,bookingsForDay,timeOff]=await Promise.all([
+    const [hoursRows,bookingsForDay,timeOff,breaksRows]=await Promise.all([
       db.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,input.tenantId),eq(staffWorkingHours.staffId,member.id),eq(staffWorkingHours.weekday,weekday),eq(staffWorkingHours.active,1))),
       db.select().from(bookings).where(and(eq(bookings.tenantId,input.tenantId),eq(bookings.staffId,member.id),eq(bookings.date,input.date))),
       db.select({id:staffTimeOff.id}).from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,input.tenantId),eq(staffTimeOff.staffId,member.id),eq(staffTimeOff.date,input.date))),
+      db.select({startMinutes:staffBreaks.startMinutes,endMinutes:staffBreaks.endMinutes}).from(staffBreaks).where(and(eq(staffBreaks.tenantId,input.tenantId),eq(staffBreaks.staffId,member.id),eq(staffBreaks.weekday,weekday),eq(staffBreaks.active,1))),
     ]);
     const hours=hoursRows[0];
     if(!hours||timeOff.length) return null;
     const activeBookings=bookingsForDay.filter(item=>item.status!=="cancelled");
     const slots=buildAvailableBookingSlots({
       weekday,openMinutes:hours.openMinutes,closeMinutes:hours.closeMinutes,
-      durationMinutes:service.durationMinutes,existingBookings:bookingsForDay,
+      durationMinutes:service.durationMinutes,existingBookings:bookingsForDay,breaks:breaksRows,
       isFuture:start=>isLocalBookingIntervalValid(input.date,start,service.durationMinutes,tenant.timezone||"Asia/Muscat")&&isBookingStartInFuture(input.date,start,tenant.timezone||"Asia/Muscat"),
     });
     if(!slots.length) return null;
@@ -527,6 +528,8 @@ export async function createDashboardBooking(tenantId:number, actorUserId:number
     const hours=await tx.select().from(staffWorkingHours).where(and(eq(staffWorkingHours.tenantId,tenantId),eq(staffWorkingHours.staffId,input.staffId),eq(staffWorkingHours.weekday,weekday),eq(staffWorkingHours.active,1)));
     if(!isWithinStaffWorkingHours(weekday,input.startMinutes,duration,hours)) throw new Error("الموعد خارج ساعات عمل الموظف");
     const sameDay=await tx.select().from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.staffId,input.staffId),eq(bookings.date,input.date)));
+    const breaks=await tx.select({startMinutes:staffBreaks.startMinutes,endMinutes:staffBreaks.endMinutes}).from(staffBreaks).where(and(eq(staffBreaks.tenantId,tenantId),eq(staffBreaks.staffId,input.staffId),eq(staffBreaks.weekday,weekday),eq(staffBreaks.active,1)));
+    if(hasStaffBreakConflict(breaks,{startMinutes:input.startMinutes,durationMinutes:duration})) throw new Error("الموعد يتعارض مع فترة استراحة الموظف");
     if(hasBookingConflict(sameDay,{startMinutes:input.startMinutes,durationMinutes:duration})) throw new Error("هذا الموعد متعارض مع حجز آخر");
     const existingClient=(await tx.select().from(clients).where(and(eq(clients.tenantId,tenantId),eq(clients.phone,phone))).limit(1))[0];
     let clientId=existingClient?.id;
