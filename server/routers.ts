@@ -35,7 +35,7 @@ export const appRouter = router({
   workspace: router({
     current: protectedProcedure.query(({ ctx }) => getTenantForUser(ctx.user)),
     accessContext: protectedProcedure.query(({ctx}) => getTenantAccessContext(ctx.user)),
-    employeeBookings: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),date:z.string().regex(/^\d{4}-\\d{2}-\\d{2}$/),endDate:z.string().regex(/^\d{4}-\\d{2}-\\d{2}$/).optional()})).query(async ({ctx,input}) => {
+    employeeBookings: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),endDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()})).query(async ({ctx,input}) => {
       const access = await getTenantAccessContext(ctx.user);
       if (!access || access.tenant.id !== input.tenantId || access.role !== "staff" || !access.staffId)
         throw new TRPCError({code:"FORBIDDEN",message:"حساب الموظف غير مرتبط بملف موظف نشط في هذه الشركة"});
