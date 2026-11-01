@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPublicBooking } from "./db";
+import { createPublicBooking, hasStaffBreakConflict } from "./db";
 
 const validInput = {
   slug: "test-salon",
@@ -31,5 +31,22 @@ describe("public booking idempotency key validation", () => {
   it("trims surrounding whitespace from a valid idempotency key", async () => {
     await expect(createPublicBooking({ ...validInput, idempotencyKey: "  valid-key  " }))
       .rejects.toThrow("Company not found");
+  });
+});
+
+
+describe("staff break conflict validation", () => {
+  const breakPeriod = [{ startMinutes: 720, endMinutes: 780 }];
+  it("rejects a booking that overlaps the start of a break", () => {
+    expect(hasStaffBreakConflict(breakPeriod, { startMinutes: 705, durationMinutes: 30 })).toBe(true);
+  });
+  it("rejects a booking that starts during a break", () => {
+    expect(hasStaffBreakConflict(breakPeriod, { startMinutes: 735, durationMinutes: 30 })).toBe(true);
+  });
+  it("allows a booking that ends exactly when a break begins", () => {
+    expect(hasStaffBreakConflict(breakPeriod, { startMinutes: 690, durationMinutes: 30 })).toBe(false);
+  });
+  it("allows a booking that starts exactly when a break ends", () => {
+    expect(hasStaffBreakConflict(breakPeriod, { startMinutes: 780, durationMinutes: 30 })).toBe(false);
   });
 });
