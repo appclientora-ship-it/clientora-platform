@@ -103,7 +103,7 @@ describe("available public booking slots", () => {
       existingBookings: [{ id: 1, startMinutes: 600, durationMinutes: 60, status: "confirmed" }],
       isFuture: () => true,
     });
-    expect(slots).toEqual([540, 570, 660]);
+    expect(slots).toEqual([540, 660]);
   });
 
   it("excludes past slots and does not offer slots too close to closing", () => {
