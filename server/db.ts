@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, tenants, tenantMembers, users } from "../drizzle/schema";
+import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinkTokens, tenants, tenantMembers, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { buildBookingDemand } from './bookingDemand';
 
@@ -28,6 +28,17 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   if (!Object.keys(updateSet).length) updateSet.lastSignedIn = new Date();
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
+
+export async function createTelegramLinkCode(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const code = randomBytes(24).toString("base64url");
+  const tokenHash = createHash("sha256").update(code).digest("hex");
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  await db.insert(telegramLinkTokens).values({ userId, tokenHash, expiresAt });
+  return { code, expiresAt };
+}
+
 export async function getUserByOpenId(openId: string) {
   const db = await getDb(); if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
