@@ -100,7 +100,7 @@ export async function createTenantForUser(userId: number, input: {name:string; s
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   try {
     return await db.transaction(async tx => {
-      const existing = await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
+      const existing = await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug, slug)).limit(1);
       if (existing[0]) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
       const tenantResult = await tx.insert(tenants).values({name:input.name.trim(), slug:input.slug, city:input.city?.trim() || null, currency:input.currency ?? "ر.ع", status:"trial"});
       const tenantId = Number(tenantResult[0].insertId);
@@ -580,15 +580,24 @@ export async function getSmartScheduleSuggestions(input:{tenantId:number;service
 }
 
 export async function createPublicBooking(input: {slug:string; clientName:string; phone:string; serviceId:number; serviceIds?:number[]; staffId:number; date:string; startMinutes:number; note?:string; idempotencyKey:string}) {
+  const slug = input.slug.trim();
+  const clientName = input.clientName.trim();
+  const phone = input.phone.trim();
+  const note = input.note?.trim() ?? "";
   const idempotencyKey = input.idempotencyKey.trim();
+  if (slug.length < 2 || slug.length > 120) throw new Error("رابط الشركة غير صالح");
+  if (clientName.length < 2 || clientName.length > 160) throw new Error("اسم العميل يجب أن يكون بين حرفين و160 حرفاً");
+  if (phone.length < 5 || phone.length > 40) throw new Error("رقم الهاتف غير صالح");
+  if (note.length > 500) throw new Error("ملاحظات الحجز تتجاوز الحد المسموح");
   if (!idempotencyKey || idempotencyKey.length > 64) {
     throw new Error("مفتاح الحجز غير صالح");
   }
-  const normalizedRequest = { slug:input.slug, clientName:input.clientName.trim(), phone:input.phone.trim(), serviceIds:Array.from(new Set(input.serviceIds?.length ? input.serviceIds : [input.serviceId])), staffId:input.staffId, date:input.date, startMinutes:input.startMinutes, note:input.note ?? "" };
+  if (input.serviceIds && input.serviceIds.length > 20) throw new Error("يمكن اختيار 20 خدمة كحد أقصى");
+  const normalizedRequest = { slug, clientName, phone, serviceIds:Array.from(new Set(input.serviceIds?.length ? input.serviceIds : [input.serviceId])), staffId:input.staffId, date:input.date, startMinutes:input.startMinutes, note };
   const requestHash = createHash("sha256").update(JSON.stringify(normalizedRequest)).digest("hex");
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   return db.transaction(async tx => {
-  await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug,input.slug)).for("update");
+  await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug,slug)).for("update");
 
   const tenantRows = await tx.select().from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
   const tenant = tenantRows[0]; if (!tenant) throw new Error("Company not found");
@@ -628,7 +637,7 @@ export async function createPublicBooking(input: {slug:string; clientName:string
     const result = await tx.insert(clients).values({tenantId:tenant.id, name:input.clientName, phone:input.phone, visits:0, totalSpent:0, lastVisit:input.date});
     clientId = Number(result[0].insertId);
   }
-  const result = await tx.insert(bookings).values({tenantId:tenant.id, clientId, staffId:input.staffId, serviceId:selectedServices[0].id, date:input.date, startMinutes:input.startMinutes, durationMinutes:totalDuration, totalPrice, status:"new", source:"online", paid:0, note:input.note ?? null, idempotencyKey, requestHash});
+  const result = await tx.insert(bookings).values({tenantId:tenant.id, clientId, staffId:input.staffId, serviceId:selectedServices[0].id, date:input.date, startMinutes:input.startMinutes, durationMinutes:totalDuration, totalPrice, status:"new", source:"online", paid:0, note:note || null, idempotencyKey, requestHash});
   const bookingId = Number(result[0].insertId);
   await tx.insert(bookingItems).values(selectedServices.map(item => ({tenantId:tenant.id,bookingId,serviceId:item.id,staffId:input.staffId,durationMinutes:item.durationMinutes,price:item.price})));
   await tx.insert(auditLogs).values({tenantId:tenant.id,actorUserId:null,action:"booking.created",entity:"booking",entityId:bookingId});
