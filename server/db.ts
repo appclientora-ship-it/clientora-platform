@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffInvites, staffTimeOff, staffWorkingHours, tenants, tenantMembers, users } from "../drizzle/schema";
@@ -81,10 +81,19 @@ export async function listDetailedBookings(tenantId:number,date:string,endDate?:
   const rows = await db.select({booking:bookings, client:clients, service:services, staff}).from(bookings)
     .innerJoin(clients, eq(bookings.clientId, clients.id)).innerJoin(services, eq(bookings.serviceId, services.id)).innerJoin(staff, eq(bookings.staffId, staff.id))
     .where(dateCondition).orderBy(bookings.date,bookings.startMinutes);
-  const visitRows = await db.select({clientId:bookings.clientId, visits:count()}).from(bookings)
-    .where(and(eq(bookings.tenantId,tenantId),eq(bookings.status,"completed"))).groupBy(bookings.clientId);
-  const completedVisits = new Map(visitRows.map(row => [row.clientId, Number(row.visits)]));
-  return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes, price:row.booking.totalPrice ?? row.service.price, staffName:row.staff.name, previousVisits:Math.max(0,(completedVisits.get(row.client.id) ?? 0) - (row.booking.status === "completed" ? 1 : 0)), source:row.booking.source}));
+  const clientIds = [...new Set(rows.map(row => row.booking.clientId))];
+  const visitRows = clientIds.length
+    ? await db.select({clientId:bookings.clientId, date:bookings.date, startMinutes:bookings.startMinutes}).from(bookings)
+        .where(and(eq(bookings.tenantId,tenantId),eq(bookings.status,"completed"),inArray(bookings.clientId,clientIds)))
+    : [];
+  return rows.map(row => {
+    const previousVisits = visitRows.filter(visit =>
+      visit.clientId === row.booking.clientId &&
+      (visit.date < row.booking.date ||
+        (visit.date === row.booking.date && visit.startMinutes < row.booking.startMinutes))
+    ).length;
+    return {...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes, price:row.booking.totalPrice ?? row.service.price, staffName:row.staff.name, previousVisits, source:row.booking.source};
+  });
 }
 export function isTenantPublicBookingEnabled(status: "active" | "trial" | "suspended"): boolean {
   return status !== "suspended";
