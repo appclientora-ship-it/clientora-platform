@@ -21,7 +21,7 @@ const dateInZone = (date:Date, timezone:string) => {
 const addDays = (iso:string, days:number) => {
   const date = new Date(iso+"T12:00:00Z"); date.setUTCDate(date.getUTCDate()+days); return date.toISOString().slice(0,10);
 };
-const weekdayNames = { ar:["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"], en:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"], ru:["Вс","Пн","Вт","Ср","Чт","Пт","Сб"] };
+const weekdayNames: Record<"ar" | "en" | "ru" | "fr" | "it", string[]> = { ar:["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"], en:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"], ru:["Вс","Пн","Вт","Ср","Чт","Пт","Сб"], fr:["dim.","lun.","mar.","mer.","jeu.","ven.","sam."], it:["dom","lun","mar","mer","gio","ven","sab"] };
 
 export default function DashboardOverview({tenantId,timezone,currency,workspaceName}:{tenantId?:number;timezone:string;currency:string;workspaceName:string}) {
   const {language,t} = useLanguage();
@@ -45,15 +45,15 @@ export default function DashboardOverview({tenantId,timezone,currency,workspaceN
     return {day:weekdays[new Date(date+"T12:00:00Z").getUTCDay()],bookings:count};
   }),[rows,today]);
   const demandData = useMemo(()=>[9,12,15,18,21].map(hour=>({
-    time:new Intl.DateTimeFormat(language==="en"?"en-GB":language==="ru"?"ru-RU":"ar-OM",{hour:"numeric",hour12:true,timeZone:timezone}).format(new Date(`${today}T${String(hour).padStart(2,"0")}:00:00`)),
+    time:new Intl.DateTimeFormat(language==="en"?"en-GB":language==="ru"?"ru-RU":language==="fr"?"fr-FR":language==="it"?"it-IT":"ar-OM",{hour:"numeric",hour12:true,timeZone:timezone}).format(new Date(`${today}T${String(hour).padStart(2,"0")}:00:00`)),
     count:rows.filter(row=>row.date===today&&Math.floor(row.startMinutes/60)>=hour&&Math.floor(row.startMinutes/60)<hour+3&&row.status!=="cancelled").length
   })),[rows,today,language,timezone]);
   const peak = [...demandData].sort((a,b)=>b.count-a.count)[0];
   const nowMinutes = (()=>{const parts=new Intl.DateTimeFormat("en-GB",{timeZone:timezone,hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date()).split(":").map(Number);return parts[0]*60+parts[1];})();
   const upcoming = [...todayRows].filter(row=>row.startMinutes>=nowMinutes&&row.status!=="cancelled").sort((a,b)=>a.startMinutes-b.startMinutes).slice(0,5);
-  const locale = language === "en" ? "en-GB" : language === "ru" ? "ru-RU" : "ar";
+  const locale = language === "en" ? "en-GB" : language === "ru" ? "ru-RU" : language === "fr" ? "fr-FR" : language === "it" ? "it-IT" : "ar-OM";
   const dateLabel = new Intl.DateTimeFormat(locale,{timeZone:timezone,weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(new Date());
-  const money = (value:number)=>new Intl.NumberFormat(language==="ar"?"ar-OM":language==="ru"?"ru-RU":"en-GB",{minimumFractionDigits:0,maximumFractionDigits:2}).format(value)+" "+currency;
+  const money = (value:number)=>new Intl.NumberFormat(language==="ar"?"ar-OM":language==="ru"?"ru-RU":language==="fr"?"fr-FR":language==="it"?"it-IT":"en-GB",{minimumFractionDigits:0,maximumFractionDigits:2}).format(value)+" "+currency;
 
   return <div className="clientora-dashboard">
     <div className="dashboard-heading">

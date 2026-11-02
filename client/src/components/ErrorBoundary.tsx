@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { AlertTriangle, RotateCcw } from "lucide-react";
-import { Component, ReactNode } from "react";
+import { Component, ReactNode, type ContextType } from "react";
+import { LanguageContext } from "@/contexts/LanguageContext";
 
 interface Props {
   children: ReactNode;
@@ -12,6 +13,9 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
+  static contextType = LanguageContext;
+  declare context: ContextType<typeof LanguageContext>;
+
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -23,22 +27,18 @@ class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const t = this.context?.t ?? ((value: string) => value);
+      const language = this.context?.language ?? "ar";
       return (
-        <div className="flex items-center justify-center min-h-screen p-8 bg-background">
+        <div dir={language === "ar" ? "rtl" : "ltr"} className="flex items-center justify-center min-h-screen p-8 bg-background">
           <div className="flex flex-col items-center w-full max-w-2xl p-8">
-            <AlertTriangle
-              size={48}
-              className="text-destructive mb-6 flex-shrink-0"
-            />
-
-            <h2 className="text-xl mb-4">An unexpected error occurred.</h2>
-
+            <AlertTriangle size={48} className="text-destructive mb-6 flex-shrink-0" />
+            <h2 className="text-xl mb-4">{t("حدث خطأ غير متوقع.")}</h2>
             <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
               <pre className="text-sm text-muted-foreground whitespace-break-spaces">
                 {this.state.error?.stack}
               </pre>
             </div>
-
             <button
               onClick={() => window.location.reload()}
               className={cn(
@@ -48,13 +48,12 @@ class ErrorBoundary extends Component<Props, State> {
               )}
             >
               <RotateCcw size={16} />
-              Reload Page
+              {t("إعادة تحميل الصفحة")}
             </button>
           </div>
         </div>
       );
     }
-
     return this.props.children;
   }
 }

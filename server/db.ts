@@ -29,7 +29,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
 
-export async function updateUserLanguage(userId: number, language: "ar" | "en" | "ru") {
+export async function updateUserLanguage(userId: number, language: "ar" | "en" | "ru" | "fr" | "it") {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
   await db.update(users).set({ language }).where(eq(users.id, userId));
@@ -96,13 +96,23 @@ export async function getUserByOpenId(openId: string) {
 }
 export async function listTenants() { const db = await getDb(); return db ? db.select().from(tenants).orderBy(desc(tenants.createdAt)) : []; }
 export async function setTenantStatus(tenantId:number,status:"active"|"trial"|"suspended",actorUserId:number) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(tenants).set({status}).where(eq(tenants.id,tenantId)); await db.insert(auditLogs).values({tenantId,actorUserId,action:`tenant.${status}`,entity:"tenant",entityId:tenantId}); return (await db.select().from(tenants).where(eq(tenants.id,tenantId)).limit(1))[0]; }
-export async function createTenantForUser(userId: number, input: {name:string; slug:string; city?:string; currency?:string}) {
+export function assertTenantCreationAllowed(userRole: "user" | "admin", memberships: Array<{ role: "owner" | "manager" | "staff" }>) {
+  if (userRole !== "admin" && memberships.length > 0 && !memberships.some(member => member.role === "owner")) {
+    throw new Error("إنشاء شركة جديدة متاح لصاحب الشركة فقط");
+  }
+}
+
+export async function createTenantForUser(userId: number, input: {name:string; slug:string; city?:string; countryCode?:string; currency?:string; timezone?:string; defaultLanguage?:"ar"|"en"|"ru"|"fr"|"it"}) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   try {
     return await db.transaction(async tx => {
+      const creator = (await tx.select({ role: users.role }).from(users).where(eq(users.id, userId)).limit(1))[0];
+      const memberships = await tx.select({ role: tenantMembers.role }).from(tenantMembers).where(eq(tenantMembers.userId, userId));
+      assertTenantCreationAllowed(creator?.role ?? "user", memberships);
       const existing = await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
       if (existing[0]) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
-      const tenantResult = await tx.insert(tenants).values({name:input.name.trim(), slug:input.slug, city:input.city?.trim() || null, currency:input.currency ?? "ر.ع", status:"trial"});
+      if (input.timezone) { try { new Intl.DateTimeFormat("en-US", { timeZone: input.timezone }); } catch { throw new Error("المنطقة الزمنية غير صحيحة"); } }
+      const tenantResult = await tx.insert(tenants).values({name:input.name.trim(), slug:input.slug, city:input.city?.trim() || null, countryCode:input.countryCode ?? "OM", currency:input.currency ?? "OMR", timezone:input.timezone ?? "Asia/Muscat", defaultLanguage:input.defaultLanguage ?? "ar", status:"trial"});
       const tenantId = Number(tenantResult[0].insertId);
       await tx.insert(tenantMembers).values({tenantId, userId, role:"owner"});
       return (await tx.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1))[0];

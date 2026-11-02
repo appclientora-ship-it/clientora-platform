@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { ArrowLeft, CheckCircle2, LockKeyhole, Mail, UserRound, Eye, EyeOff, Building2, Users, CalendarDays, ChartNoAxesCombined, Globe2, ShieldCheck, LogIn } from "lucide-react";
+import { ArrowLeft, CheckCircle2, LockKeyhole, Mail, UserRound, Eye, EyeOff, Users, CalendarDays, ChartNoAxesCombined, Globe2, ShieldCheck, LogIn } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -12,8 +12,8 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
   const query = new URLSearchParams(useSearch());
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [accountType, setAccountType] = useState<"owner" | "staff">("owner");
-  const [inviteCode, setInviteCode] = useState("");
+  const inviteCode = query.get("inviteCode")?.trim() || "";
+  const isStaffInvite = inviteCode.length > 0;
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
@@ -21,25 +21,25 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
   const [error, setError] = useState("");
 
   const login = trpc.auth.login.useMutation({ onSuccess: () => navigate("/"), onError: e => setError(t(e.message)) });
-  const register = trpc.auth.register.useMutation({ onSuccess: () => navigate("/"), onError: e => setError(t(e.message)) });
+  const register = trpc.auth.register.useMutation({ onSuccess: () => navigate(isStaffInvite ? "/" : "/setup-company"), onError: e => setError(t(e.message)) });
   const forgot = trpc.auth.forgotPassword.useMutation({ onSuccess: r => setMessage(t(r.message)), onError: e => setError(t(e.message)) });
   const reset = trpc.auth.resetPassword.useMutation({ onSuccess: () => navigate("/login?reset=1"), onError: e => setError(t(e.message)) });
   const submit = (event: FormEvent) => {
     event.preventDefault(); setError(""); setMessage("");
-    if (mode === "register") register.mutate({ name, email, password, ...(accountType === "staff" ? { inviteCode } : {}) });
+    if (mode === "register") register.mutate({ name, email, password, ...(isStaffInvite ? { inviteCode } : {}) });
     else if (mode === "forgot") forgot.mutate({ email });
     else if (mode === "reset") reset.mutate({ token: query.get("token") || "", password });
     else login.mutate({ email, password });
   };
   const title = t(mode === "register" ? "إنشاء حساب جديد" : mode === "forgot" ? "استعادة كلمة المرور" : mode === "reset" ? "تعيين كلمة مرور جديدة" : "مرحباً بعودتك!");
   const description = mode === "login" ? t("سجل دخولك للوصول إلى حسابك وإدارة أعمالك.") :
-    mode === "register" ? (accountType === "staff" ? t("أدخل كود الدعوة الذي أرسله لك صاحب الشركة للانضمام إلى فريقه.") : t("أنشئ حساب صاحب الشركة وابدأ إعداد مساحة عملك.")) :
+    mode === "register" ? (isStaffInvite ? t("أدخل كود الدعوة الذي أرسله لك صاحب الشركة للانضمام إلى فريقه.") : t("أنشئ حساب صاحب الشركة وابدأ إعداد مساحة عملك.")) :
     mode === "forgot" ? t("سنرسل رابطاً آمناً إلى بريدك الإلكتروني.") : t("اكتب كلمة مرور جديدة لحسابك.");
   const busy = login.isPending || register.isPending || forgot.isPending || reset.isPending;
 
   return <main className="clientora-auth" dir={language === "ar" ? "rtl" : "ltr"}>
     <section className="auth-visual">
-      <div><div className="auth-brand"><span className="auth-brand-mark">✿</span><div><b>Clientora</b><small>Book · Manage · Grow</small></div></div></div>
+      <div><div className="auth-brand"><span className="auth-brand-mark">✿</span><div><b>Clientora</b><small>{t("احجز · أدر · طوّر")}</small></div></div></div>
       <div className="auth-visual-content">
         <span className="auth-kicker">{t("منصة واحدة لإدارة أعمالك")}</span>
         <h2>{t("مرحباً بك في")}<strong> Clientora</strong></h2>
@@ -55,18 +55,16 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
       <div className="auth-visual-orb auth-visual-orb-one"/><div className="auth-visual-orb auth-visual-orb-two"/>
     </section>
     <section className="auth-main">
-      <div className="auth-language"><Globe2 size={18}/>{(["ar","en","ru"] as const).map(code=><button type="button" key={code} className={language===code?"active":""} onClick={()=>setLanguage(code)}>{code==="ar"?"العربية":code==="en"?"English":"Русский"}</button>)}</div>
+      <div className="auth-language"><Globe2 size={18}/>{(["ar","en","ru","fr","it"] as const).map(code=><button type="button" key={code} className={language===code?"active":""} onClick={()=>setLanguage(code)}>{code==="ar"?"العربية":code==="en"?"English":code==="ru"?"Русский":code==="fr"?"Français":"Italiano"}</button>)}</div>
       <section className="auth-card">
         <div className="auth-card-brand"><span>✿</span><b>Clientora</b></div>
         <div className="auth-card-head"><h1>{title}</h1><p>{description}</p></div>
-        {mode === "register" && <div className="auth-account-types" role="group" aria-label={t("نوع الحساب")}>
-          <button type="button" className={accountType === "owner" ? "selected" : ""} onClick={() => setAccountType("owner")}><Building2 size={17}/>{t("صاحب الشركة")}</button>
-          <button type="button" className={accountType === "staff" ? "selected" : ""} onClick={() => setAccountType("staff")}><UserRound size={17}/>{t("موظف")}</button>
+        {mode === "register" && <div className="auth-account-types" role="status">
+          <span>{isStaffInvite ? t("موظف") : t("صاحب الشركة")}</span>
         </div>}
         <form onSubmit={submit}>
           {mode === "register" && <>
             <label className="auth-field"><UserRound size={18}/><input required value={name} onChange={e=>setName(e.target.value)} placeholder={t("الاسم الكامل")}/></label>
-            {accountType === "staff" && <label className="auth-field"><LockKeyhole size={18}/><input required value={inviteCode} onChange={e=>setInviteCode(e.target.value.trim())} placeholder={t("كود دعوة الشركة")} dir="ltr"/></label>}
           </>}
           {mode !== "reset" && <label className="auth-field"><Mail size={18}/><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder={t("البريد الإلكتروني")} dir="ltr"/></label>}
           {mode !== "forgot" && <label className="auth-field"><LockKeyhole size={18}/><input required minLength={8} type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder={t("كلمة المرور (8 أحرف على الأقل)")} dir="ltr"/><button className="auth-eye" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?t("إخفاء كلمة المرور"):t("إظهار كلمة المرور")}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></label>}
