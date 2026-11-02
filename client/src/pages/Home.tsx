@@ -197,9 +197,8 @@ function BookingCard({booking,onSelect,selected,onDragStart,onResize}:{booking:B
   };
   return <button draggable={!resizing} className={`booking-card ${meta.className} ${selected ? "selected" : ""}`} style={{top:((booking.start-540)/30)*44+3,height:Math.max(58,(previewDuration/30)*44-7)}} onClick={onSelect} onDragStart={onDragStart}>
     <span className="booking-status"><Check size={11}/></span>
-    {booking.previousVisits===0 && <span className="booking-new-badge">{t("عميل جديد")}</span>}
     <span className="booking-time-band"><b>{timeLabel(booking.start)} – {timeLabel(booking.start+previewDuration)}</b><strong>{booking.client}</strong></span>
-    <span className="booking-card-body"><b>{booking.service}</b><span>{booking.source==="online"?t("حجز إلكتروني"):t("حجز من الإدارة")}</span><small>{booking.price} {t("ر.ع")} · {booking.previousVisits} {t("زيارة سابقة")}</small></span>
+    <span className="booking-card-body">{booking.previousVisits===0 && <span className="booking-new-badge">{t("عميل جديد")}</span>}<b>{booking.service}</b><span>{booking.source==="online"?t("حجز إلكتروني"):t("حجز من الإدارة")}</span><small>{booking.price} {t("ر.ع")} · {booking.previousVisits} {t("زيارة سابقة")}</small></span>
     <MoreVertical className="booking-more" size={14}/>
     <span className="booking-resize-handle" onMouseDown={begin} title={t("اسحب لتغيير مدة الحجز")}><GripHorizontal size={14}/></span>
   </button>;
