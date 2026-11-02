@@ -21,13 +21,36 @@ const verifyPassword = async (password: string, stored: string) => {
   const expectedBytes = Buffer.from(expected, "hex");
   return actualBytes.length === expectedBytes.length && crypto.timingSafeEqual(actualBytes, expectedBytes);
 };
-const sign = (userId: number, expires: number) => { const payload = `${userId}.${expires}`; const signature = crypto.createHmac("sha256", secret()).update(payload).digest("base64url"); return `${payload}.${signature}`; };
-const readSession = (token?: string) => { if (!token) return null; const [id, expires, signature] = token.split("."); const userId = Number(id); if (!userId || !expires || !signature || Number(expires) < Date.now()) return null; const expected = crypto.createHmac("sha256", secret()).update(`${id}.${expires}`).digest("base64url"); const supplied = Buffer.from(signature);
+type SessionClaims = { userId: number; passwordFingerprint: string };
+const sign = (userId: number, expires: number, passwordFingerprint: string) => { const payload = `${userId}.${expires}.${passwordFingerprint}`; const signature = crypto.createHmac("sha256", secret()).update(payload).digest("base64url"); return `${payload}.${signature}`; };
+const readSession = (token?: string): (SessionClaims & { expires: number }) | null => {
+  if (!token) return null;
+  const [id, expires, passwordFingerprint, signature] = token.split(".");
+  const userId = Number(id);
+  const expiresAt = Number(expires);
+  if (!Number.isSafeInteger(userId) || userId < 1 || !Number.isSafeInteger(expiresAt) || expiresAt <= Date.now() || !/^[a-f0-9]{64}$/.test(passwordFingerprint ?? "") || !signature) return null;
+  const payload = `${id}.${expires}.${passwordFingerprint}`;
+  const expected = crypto.createHmac("sha256", secret()).update(payload).digest("base64url");
+  const supplied = Buffer.from(signature);
   const calculated = Buffer.from(expected);
-  return supplied.length === calculated.length && crypto.timingSafeEqual(supplied, calculated) ? userId : null; };
+  return supplied.length === calculated.length && crypto.timingSafeEqual(supplied, calculated)
+    ? { userId, expires: expiresAt, passwordFingerprint }
+    : null;
+};
 export const localSessionCookie = SESSION_COOKIE;
-export function sessionForUser(userId: number) { return sign(userId, Date.now() + SESSION_TTL); }
-export function userIdFromSession(token?: string) { return readSession(token); }
+export function sessionForUser(user: Pick<User, "id" | "passwordHash">) {
+  if (!user.passwordHash) throw new Error("Cannot create a local session without a password hash");
+  return sign(user.id, Date.now() + SESSION_TTL, hash(user.passwordHash));
+}
+export function userIdFromSession(token?: string): SessionClaims | null {
+  const session = readSession(token);
+  return session ? { userId: session.userId, passwordFingerprint: session.passwordFingerprint } : null;
+}
+export function sessionMatchesPasswordHash(session: SessionClaims, storedPasswordHash: string): boolean {
+  const expected = Buffer.from(hash(storedPasswordHash));
+  const supplied = Buffer.from(session.passwordFingerprint);
+  return expected.length === supplied.length && crypto.timingSafeEqual(expected, supplied);
+}
 export async function findLocalUserById(id: number) { const db = await getDb(); if (!db) return undefined; return (await db.select().from(users).where(eq(users.id, id)).limit(1))[0]; }
 export function assertEmailRegistrationAllowed(existingUser: Pick<User, "passwordHash"> | undefined): void {
   if (existingUser) {
