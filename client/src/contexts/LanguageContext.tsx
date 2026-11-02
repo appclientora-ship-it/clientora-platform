@@ -1138,6 +1138,8 @@ const dashboardTranslations: Record<Exclude<AppLanguage, "ar">, Record<string,st
   
     "حدث خطأ غير متوقع.": "An unexpected error occurred.",
     "إعادة تحميل الصفحة": "Reload page",
+
+    "احجز · أدر · طوّر": "Book · Manage · Grow",
 },
   ru: {
     "أهلاً بك 👋": "Добро пожаловать 👋",
@@ -1178,6 +1180,8 @@ const dashboardTranslations: Record<Exclude<AppLanguage, "ar">, Record<string,st
   
     "حدث خطأ غير متوقع.": "Произошла непредвиденная ошибка.",
     "إعادة تحميل الصفحة": "Перезагрузить страницу",
+
+    "احجز · أدر · طوّر": "Записывайте · Управляйте · Развивайтесь",
 },
   fr: {
     "أهلاً بك 👋": "Bienvenue 👋",
@@ -1215,7 +1219,9 @@ const dashboardTranslations: Record<Exclude<AppLanguage, "ar">, Record<string,st
     "كل حجوزاتك وفريقك وعملاؤك في مكان واحد.": "Toutes vos réservations, votre équipe et vos clients au même endroit.",
     "حجوزات هذا الأسبوع": "Réservations cette semaine",
     "عملاء": "Clients",
-  },
+  
+    "احجز · أدر · طوّر": "Réservez · Gérez · Développez",
+},
   it: {
     "أهلاً بك 👋": "Benvenuto 👋",
     "إليك ملخص أداء ": "Ecco il riepilogo delle prestazioni di ",
@@ -1252,7 +1258,9 @@ const dashboardTranslations: Record<Exclude<AppLanguage, "ar">, Record<string,st
     "كل حجوزاتك وفريقك وعملاؤك في مكان واحد.": "Tutte le prenotazioni, il team e i clienti in un unico posto.",
     "حجوزات هذا الأسبوع": "Prenotazioni questa settimana",
     "عملاء": "Clienti",
-  },
+  
+    "احجز · أدر · طوّر": "Prenota · Gestisci · Cresci",
+},
 };
 const onlineBookingTranslations: Record<Exclude<AppLanguage, "ar">, Record<string,string>> = {
   en: {
