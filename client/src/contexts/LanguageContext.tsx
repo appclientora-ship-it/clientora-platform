@@ -226,6 +226,16 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "ر.ع":"OMR",
     "إلغاء الحجز":"Cancel booking",
     "اسحب لتغيير مدة الحجز":"Drag to change booking duration",
+    "نظّم مواعيدك،":"Organize your appointments,",
+    "ودَع فريقك يعمل براحة.":"and help your team work with ease.",
+    "البريد الإلكتروني أو كلمة المرور غير صحيحة":"The email address or password is incorrect",
+    "كود الدعوة غير صالح أو منتهي؛ اطلب دعوة جديدة من صاحب الشركة":"This invitation code is invalid or expired. Ask the company owner for a new one.",
+    "هذا الكود مخصص لبريد إلكتروني آخر":"This code is assigned to a different email address.",
+    "ملف الموظف غير متاح أو مرتبط بحساب آخر؛ تواصل مع صاحب الشركة":"This staff profile is unavailable or already linked to another account. Contact the company owner.",
+    "تم استخدام كود الدعوة بالفعل؛ اطلب دعوة جديدة":"This invitation code has already been used. Ask for a new one.",
+    "رابط الاستعادة غير صالح أو منتهي":"This password reset link is invalid or has expired.",
+    "تعذر تحديث كلمة المرور":"Could not update the password.",
+    "تعذر إنشاء الحساب":"Could not create the account.",
   },
   ru: {
     "منصة إدارة الحجوزات":"Платформа управления бронированием","مساحة تشغيل آمنة":"Защищённое рабочее пространство",
@@ -451,6 +461,16 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "ر.ع":"OMR",
     "إلغاء الحجز":"Отменить бронирование",
     "اسحب لتغيير مدة الحجز":"Перетащите, чтобы изменить длительность записи",
+    "نظّم مواعيدك،":"Организуйте свои записи,",
+    "ودَع فريقك يعمل براحة.":"чтобы вашей команде было удобно работать.",
+    "البريد الإلكتروني أو كلمة المرور غير صحيحة":"Неверный адрес электронной почты или пароль",
+    "كود الدعوة غير صالح أو منتهي؛ اطلب دعوة جديدة من صاحب الشركة":"Код приглашения недействителен или истёк. Попросите владельца компании создать новый.",
+    "هذا الكود مخصص لبريد إلكتروني آخر":"Этот код предназначен для другого адреса электронной почты.",
+    "ملف الموظف غير متاح أو مرتبط بحساب آخر؛ تواصل مع صاحب الشركة":"Профиль сотрудника недоступен или уже связан с другим аккаунтом. Свяжитесь с владельцем компании.",
+    "تم استخدام كود الدعوة بالفعل؛ اطلب دعوة جديدة":"Код приглашения уже использован. Попросите создать новый.",
+    "رابط الاستعادة غير صالح أو منتهي":"Ссылка для сброса пароля недействительна или срок её действия истёк.",
+    "تعذر تحديث كلمة المرور":"Не удалось обновить пароль.",
+    "تعذر إنشاء الحساب":"Не удалось создать аккаунт.",
   }
 };
 type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
