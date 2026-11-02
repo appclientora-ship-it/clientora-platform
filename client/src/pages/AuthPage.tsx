@@ -55,7 +55,7 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
       <div className="auth-visual-orb auth-visual-orb-one"/><div className="auth-visual-orb auth-visual-orb-two"/>
     </section>
     <section className="auth-main">
-      <div className="auth-language"><Globe2 size={18}/>{(["ar","en","ru"] as const).map(code=><button type="button" key={code} className={language===code?"active":""} onClick={()=>setLanguage(code)}>{code==="ar"?"العربية":code==="en"?"English":"Русский"}</button>)}</div>
+      <div className="auth-language"><Globe2 size={18}/>{(["ar","en","ru","fr","it"] as const).map(code=><button type="button" key={code} className={language===code?"active":""} onClick={()=>setLanguage(code)}>{code==="ar"?"العربية":code==="en"?"English":code==="ru"?"Русский":code==="fr"?"Français":"Italiano"}</button>)}</div>
       <section className="auth-card">
         <div className="auth-card-brand"><span>✿</span><b>Clientora</b></div>
         <div className="auth-card-head"><h1>{title}</h1><p>{description}</p></div>
