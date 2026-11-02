@@ -15,15 +15,15 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
   const [accountType, setAccountType] = useState<"owner" | "staff">("owner");
   const [inviteCode, setInviteCode] = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(() => query.get("reset") === "1" ? t("تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن.") : "");
   const [error, setError] = useState("");
 
-  const login = trpc.auth.login.useMutation({ onSuccess: () => navigate("/"), onError: e => setError(e.message) });
+  const login = trpc.auth.login.useMutation({ onSuccess: () => navigate("/"), onError: e => setError(t(e.message)) });
   const register = trpc.auth.register.useMutation({ onSuccess: () => navigate("/"), onError: e => setError(e.message) });
   const forgot = trpc.auth.forgotPassword.useMutation({ onSuccess: r => setMessage(r.message), onError: e => setError(e.message) });
   const reset = trpc.auth.resetPassword.useMutation({
-    onSuccess: () => { setMessage(t("تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن.")); navigate("/login"); },
-    onError: e => setError(e.message),
+    onSuccess: () => navigate("/login?reset=1"),
+    onError: e => setError(t(e.message)),
   });
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -44,7 +44,7 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
     <div className="auth-decoration">
       <div className="auth-orb orb-one" /><div className="auth-orb orb-two" />
       <div className="auth-brand"><span>✦</span><b>Clientora</b><small>{t("منصة إدارة الحجوزات")}</small></div>
-      <div className="auth-quote">نظّم مواعيدك،<br /><strong>ودَع فريقك يعمل براحة.</strong></div>
+      <div className="auth-quote">{t("نظّم مواعيدك،")}<br /><strong>{t("ودَع فريقك يعمل براحة.")}</strong></div>
     </div>
     <section className="auth-card">
       <div className="auth-card-head">
