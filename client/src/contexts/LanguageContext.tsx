@@ -1550,6 +1550,8 @@ const homeTranslations: Partial<Record<Exclude<AppLanguage, "ar">, Record<string
     "العودة للرئيسية": "Retour à l’accueil",
     "حدث خطأ غير متوقع.": "Une erreur inattendue s’est produite.",
     "إعادة تحميل الصفحة": "Recharger la page",
+
+    "جارٍ التحقق من الجلسة...": "Vérification de la session…",
 },
   it: {
     "ر.ع": "OMR", "موقوف": "Sospeso", "تجريبي": "Prova", "نشط": "Attivo", "تفعيل": "Attiva", "أرشفة": "Archivia",
@@ -1587,6 +1589,8 @@ const homeTranslations: Partial<Record<Exclude<AppLanguage, "ar">, Record<string
     "العودة للرئيسية": "Torna alla home",
     "حدث خطأ غير متوقع.": "Si è verificato un errore imprevisto.",
     "إعادة تحميل الصفحة": "Ricarica la pagina",
+
+    "جارٍ التحقق من الجلسة...": "Verifica della sessione…",
 }
 };
 
