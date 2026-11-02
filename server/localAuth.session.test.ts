@@ -24,6 +24,7 @@ describe("password-bound sessions", () => {
     process.env.AUTH_SESSION_SECRET = "test-session-secret-that-is-long-enough-123";
     const token = sessionForUser({ id: 7, passwordHash: "salt:password-hash" });
     expect(userIdFromSession(token + "tampered")).toBeNull();
+    expect(userIdFromSession(token + ".extra")).toBeNull();
     expect(userIdFromSession("7.not-a-date.signature")).toBeNull();
   });
 });
