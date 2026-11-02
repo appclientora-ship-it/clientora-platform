@@ -599,7 +599,7 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   return db.transaction(async tx => {
   await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug,slug)).for("update");
 
-  const tenantRows = await tx.select().from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
+  const tenantRows = await tx.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
   const tenant = tenantRows[0]; if (!tenant) throw new Error("Company not found");
   const previousRows = await tx.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.idempotencyKey, idempotencyKey))).limit(1);
   if (previousRows[0]) {
@@ -631,17 +631,17 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   if (hasStaffBreakConflict(breakRows,{startMinutes:input.startMinutes,durationMinutes:totalDuration})) throw new Error("الموعد يتعارض مع فترة استراحة الموظف، اختر وقتاً آخر");
   const overlaps = hasBookingConflict(existing, {startMinutes:input.startMinutes, durationMinutes:totalDuration});
   if (overlaps) throw new Error("هذا الوقت محجوز بالفعل، اختر وقتاً آخر");
-  const clientRows = await tx.select().from(clients).where(and(eq(clients.tenantId, tenant.id), eq(clients.phone, input.phone))).limit(1);
+  const clientRows = await tx.select().from(clients).where(and(eq(clients.tenantId, tenant.id), eq(clients.phone, phone))).limit(1);
   let clientId = clientRows[0]?.id;
   if (!clientId) {
-    const result = await tx.insert(clients).values({tenantId:tenant.id, name:input.clientName, phone:input.phone, visits:0, totalSpent:0, lastVisit:input.date});
+    const result = await tx.insert(clients).values({tenantId:tenant.id, name:clientName, phone, visits:0, totalSpent:0, lastVisit:input.date});
     clientId = Number(result[0].insertId);
   }
   const result = await tx.insert(bookings).values({tenantId:tenant.id, clientId, staffId:input.staffId, serviceId:selectedServices[0].id, date:input.date, startMinutes:input.startMinutes, durationMinutes:totalDuration, totalPrice, status:"new", source:"online", paid:0, note:note || null, idempotencyKey, requestHash});
   const bookingId = Number(result[0].insertId);
   await tx.insert(bookingItems).values(selectedServices.map(item => ({tenantId:tenant.id,bookingId,serviceId:item.id,staffId:input.staffId,durationMinutes:item.durationMinutes,price:item.price})));
   await tx.insert(auditLogs).values({tenantId:tenant.id,actorUserId:null,action:"booking.created",entity:"booking",entityId:bookingId});
-  await tx.insert(notifications).values({tenantId:tenant.id,recipientStaffId:input.staffId,type:"booking.created",title:"حجز أونلاين جديد",body:`تم حجز ${selectedServices.map(item=>item.name).join(" + ")} للعميل ${input.clientName}.`,entity:"booking",entityId:bookingId});
+  await tx.insert(notifications).values({tenantId:tenant.id,recipientStaffId:input.staffId,type:"booking.created",title:"حجز أونلاين جديد",body:`تم حجز ${selectedServices.map(item=>item.name).join(" + ")} للعميل ${clientName}.`,entity:"booking",entityId:bookingId});
   return { id: bookingId, bookingId, tenantId: tenant.id, tenantName: tenant.name, serviceName: selectedServices.map(item=>item.name).join(" + "), totalDuration, totalPrice };
   });
 }
