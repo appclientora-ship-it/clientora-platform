@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users } from "../drizzle/schema";
@@ -145,8 +145,11 @@ export async function listDetailedBookings(tenantId:number,date:string,endDate?:
     .innerJoin(staff, and(eq(bookings.staffId, staff.id), eq(staff.tenantId, tenantId)))
     .where(dateCondition).orderBy(bookings.date,bookings.startMinutes);
   const historyEndDate = endDate ?? date;
-  const completedRows = await db.select({clientId:bookings.clientId,date:bookings.date,startMinutes:bookings.startMinutes})
-    .from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.status,"completed"),lte(bookings.date,historyEndDate)));
+  const visibleClientIds = Array.from(new Set(rows.map(row => row.booking.clientId)));
+  const completedRows = visibleClientIds.length
+    ? await db.select({clientId:bookings.clientId,date:bookings.date,startMinutes:bookings.startMinutes})
+        .from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.status,"completed"),inArray(bookings.clientId,visibleClientIds),lte(bookings.date,historyEndDate)))
+    : [];
   return rows.map(row => ({
     ...row.booking,
     clientName:row.client.name,
