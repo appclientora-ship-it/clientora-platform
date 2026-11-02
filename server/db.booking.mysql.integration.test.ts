@@ -217,6 +217,7 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
       [tenantId, staffId, date, 600],
     );
     expect(rows).toHaveLength(1);
+  });
 
   it("does not return a tenant booking when its related client, service, and staff belong to another tenant", async () => {
     const connection = await connectionPromise;
@@ -252,6 +253,5 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
     );
 
     await expect(listDetailedBookings(tenantA, "2099-04-15")).resolves.toEqual([]);
-  });
   });
 });
