@@ -575,8 +575,6 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const saved = auth.data?.language;
     if (saved === "ar" || saved === "en" || saved === "ru") setLanguageState(saved);
-    "نظرة عامة": "Обзор",
-    "حجز لم يحضر": "неявок",
   }, [auth.data?.language]);
   const setLanguage = useCallback((next: AppLanguage) => {
     setLanguageState(next);
