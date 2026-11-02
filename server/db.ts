@@ -102,7 +102,7 @@ export function assertTenantCreationAllowed(userRole: "user" | "admin", membersh
   }
 }
 
-export async function createTenantForUser(userId: number, input: {name:string; slug:string; city?:string; currency?:string}) {
+export async function createTenantForUser(userId: number, input: {name:string; slug:string; city?:string; countryCode?:string; currency?:string; timezone?:string; defaultLanguage?:"ar"|"en"|"ru"|"fr"|"it"}) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   try {
     return await db.transaction(async tx => {
@@ -111,7 +111,7 @@ export async function createTenantForUser(userId: number, input: {name:string; s
       assertTenantCreationAllowed(creator?.role ?? "user", memberships);
       const existing = await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
       if (existing[0]) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
-      const tenantResult = await tx.insert(tenants).values({name:input.name.trim(), slug:input.slug, city:input.city?.trim() || null, currency:input.currency ?? "ر.ع", status:"trial"});
+      if (input.timezone) { try { new Intl.DateTimeFormat("en-US", { timeZone: input.timezone }); } catch { throw new Error("المنطقة الزمنية غير صحيحة"); } }\n      const tenantResult = await tx.insert(tenants).values({name:input.name.trim(), slug:input.slug, city:input.city?.trim() || null, countryCode:input.countryCode ?? "OM", currency:input.currency ?? "OMR", timezone:input.timezone ?? "Asia/Muscat", defaultLanguage:input.defaultLanguage ?? "ar", status:"trial"});
       const tenantId = Number(tenantResult[0].insertId);
       await tx.insert(tenantMembers).values({tenantId, userId, role:"owner"});
       return (await tx.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1))[0];
