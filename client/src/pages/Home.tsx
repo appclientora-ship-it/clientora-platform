@@ -173,23 +173,26 @@ function BookingCard({booking,onSelect,selected,onDragStart,onResize}:{booking:B
   const meta=statusMeta[booking.status];
   const [resizing,setResizing]=useState(false);
   const [previewDuration,setPreviewDuration]=useState(booking.duration);
+  const previewDurationRef=useRef(booking.duration);
   const startY=useRef(0);
   const startDuration=useRef(booking.duration);
   const move=(e:MouseEvent)=>{
     if(!resizing)return;
     const delta=Math.round((e.clientY-startY.current)/44)*30;
-    setPreviewDuration(Math.max(15,Math.min(480,startDuration.current+delta)));
+    const nextDuration=Math.max(15,Math.min(480,startDuration.current+delta));
+    previewDurationRef.current=nextDuration;
+    setPreviewDuration(nextDuration);
   };
   const stop=()=>{
     setResizing(false);
     window.removeEventListener("mousemove",move);
     window.removeEventListener("mouseup",stop);
-    if(previewDuration!==booking.duration)onResize(previewDuration);
+    if(previewDurationRef.current!==booking.duration)onResize(previewDurationRef.current);
   };
   const begin=(e:React.MouseEvent)=>{
     e.preventDefault();e.stopPropagation();
     startY.current=e.clientY;startDuration.current=booking.duration;
-    setPreviewDuration(booking.duration);setResizing(true);
+    previewDurationRef.current=booking.duration;setPreviewDuration(booking.duration);setResizing(true);
     window.addEventListener("mousemove",move);window.addEventListener("mouseup",stop);
   };
   return <button draggable={!resizing} className={`booking-card ${meta.className} ${selected ? "selected" : ""}`} style={{top:((booking.start-540)/30)*44+3,height:Math.max(58,(previewDuration/30)*44-7)}} onClick={onSelect} onDragStart={onDragStart}>
