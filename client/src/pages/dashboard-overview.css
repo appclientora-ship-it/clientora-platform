@@ -95,3 +95,9 @@
 .app-shell:has(.employee-overview) .nav-item.active{background:linear-gradient(100deg,#7441e6,#8b5cf6);color:#fff;border-right:0}
 .app-shell:has(.employee-overview) .topbar{background:#fff;border-color:#eceaf4}
 .app-shell:has(.employee-overview) .content-area{background:#f7f7fc}
+
+/* Clear, accessible sign-out action in the dashboard header */
+.logout-action{gap:8px;min-height:38px;padding:8px 12px;border-color:#e8e2f5;background:#fff;color:#6f43d6;font-weight:700;white-space:nowrap}
+.logout-action:hover{background:#f6f1ff;border-color:#cfc0f2;color:#5930bb}
+.logout-action:disabled{opacity:.6;cursor:wait}
+@media(max-width:650px){.logout-action{padding:8px 9px;font-size:11px}.topbar{padding:0 12px;gap:8px}.topbar-actions{gap:6px}}
