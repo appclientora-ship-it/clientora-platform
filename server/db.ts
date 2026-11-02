@@ -100,7 +100,7 @@ export async function createTenantForUser(userId: number, input: {name:string; s
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   try {
     return await db.transaction(async tx => {
-      const existing = await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug, slug)).limit(1);
+      const existing = await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
       if (existing[0]) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
       const tenantResult = await tx.insert(tenants).values({name:input.name.trim(), slug:input.slug, city:input.city?.trim() || null, currency:input.currency ?? "ر.ع", status:"trial"});
       const tenantId = Number(tenantResult[0].insertId);
