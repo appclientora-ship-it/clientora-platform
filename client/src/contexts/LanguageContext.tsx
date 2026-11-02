@@ -1534,6 +1534,8 @@ const homeTranslations: Partial<Record<Exclude<AppLanguage, "ar">, Record<string
     "عذراً، الصفحة التي تبحث عنها غير موجودة.": "Désolé, la page que vous recherchez est introuvable.",
     "ربما تم نقلها أو حذفها.": "Elle a peut-être été déplacée ou supprimée.",
     "العودة للرئيسية": "Retour à l’accueil",
+    "حدث خطأ غير متوقع.": "Une erreur inattendue s’est produite.",
+    "إعادة تحميل الصفحة": "Recharger la page",
 },
   it: {
     "ر.ع": "OMR", "موقوف": "Sospeso", "تجريبي": "Prova", "نشط": "Attivo", "تفعيل": "Attiva", "أرشفة": "Archivia",
@@ -1569,11 +1571,13 @@ const homeTranslations: Partial<Record<Exclude<AppLanguage, "ar">, Record<string
     "عذراً، الصفحة التي تبحث عنها غير موجودة.": "Spiacenti, la pagina che cerchi non è stata trovata.",
     "ربما تم نقلها أو حذفها.": "Potrebbe essere stata spostata o eliminata.",
     "العودة للرئيسية": "Torna alla home",
+    "حدث خطأ غير متوقع.": "Si è verificato un errore imprevisto.",
+    "إعادة تحميل الصفحة": "Ricarica la pagina",
 }
 };
 
-type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
-const LanguageContext = createContext<LanguageContextValue | null>(null);
+export type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
+export const LanguageContext = createContext<LanguageContextValue | null>(null);
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const auth = trpc.auth.me.useQuery();
   const [pathname] = useLocation();
@@ -1613,9 +1617,13 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       fr: "Traduction manquante",
       it: "Traduzione mancante",
     };
-    return `[${missingLabel[language]}]`;
+    return `[${missingLabel[language]    "حدث خطأ غير متوقع.": "Произошла непредвиденная ошибка.",
+    "إعادة تحميل الصفحة": "Перезагрузить страницу",
+}]`;
   };
   return <LanguageContext.Provider value={{ language, setLanguage, t }}>{children}</LanguageContext.Provider>;
+    "حدث خطأ غير متوقع.": "An unexpected error occurred.",
+    "إعادة تحميل الصفحة": "Reload page",
 }
 export function useLanguage() {
   const value = useContext(LanguageContext);
