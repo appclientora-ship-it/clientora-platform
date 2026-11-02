@@ -1,7 +1,7 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
 import { parse as parseCookieHeader } from "cookie";
-import { findLocalUserById, localSessionCookie, userIdFromSession } from "../localAuth";
+import { findLocalUserById, localSessionCookie, sessionMatchesPasswordHash, userIdFromSession } from "../localAuth";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -16,8 +16,11 @@ export async function createContext(
 
   try {
     const token = parseCookieHeader(opts.req.headers.cookie ?? "")[localSessionCookie];
-    const localId = userIdFromSession(token);
-    if (localId) user = (await findLocalUserById(localId)) ?? null;
+    const session = userIdFromSession(token);
+    if (session) {
+      const candidate = await findLocalUserById(session.userId);
+      if (candidate?.passwordHash && sessionMatchesPasswordHash(session, candidate.passwordHash)) user = candidate;
+    }
   } catch {
     // Authentication is optional for public procedures. Invalid or expired
     // local sessions must never block public booking endpoints.
