@@ -257,7 +257,7 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "إنشاء المشروع":"Create project",
     "نظرة عامة":"Overview",
     "كثافة الجدول":"Schedule density",
-    "مرحباً بعودتك!":"Welcome back!", "سجل دخولك للوصول إلى حسابك وإدارة أعمالك.":"Sign in to access your account and manage your business.", "منصة واحدة لإدارة أعمالك":"One platform to manage your business", "مرحباً بك في":"Welcome to", "منصة متكاملة لإدارة الصالونات والسبا والحلاقين والحجوزات أونلاين.":"An all-in-one platform for salons, spas, barbershops, and online bookings.", "إدارة المواعيد بسهولة ومرونة":"Manage appointments with ease", "متابعة العملاء والموظفين":"Manage customers and staff", "تقارير دقيقة واحترافية":"Accurate professional reports", "متعدد اللغات والعملات":"Multiple languages and currencies", "إدارة أسهل":"Simpler management", "حجوزات منظمة":"Organized bookings", "نمو مستمر":"Continuous growth", "صاحب الشركة":"Business owner", "تذكرني":"Remember me", "تسجيل الدخول":"Sign in", "إنشاء حساب جديد":"Create a new account", "إخفاء كلمة المرور":"Hide password", "إظهار كلمة المرور":"Show password", "بياناتك آمنة ومحمية بأعلى معايير الأمان":"Your data is protected with strong security standards", "الشروط والأحكام":"Terms and conditions", "سياسة الخصوصية":"Privacy policy"
+    "مرحباً بعودتك!":"Welcome back!", "سجل دخولك للوصول إلى حسابك وإدارة أعمالك.":"Sign in to access your account and manage your business.", "منصة واحدة لإدارة أعمالك":"One platform to manage your business", "مرحباً بك في":"Welcome to", "منصة متكاملة لإدارة الصالونات والسبا والحلاقين والحجوزات أونلاين.":"An all-in-one platform for salons, spas, barbershops, and online bookings.", "إدارة المواعيد بسهولة ومرونة":"Manage appointments with ease", "متابعة العملاء والموظفين":"Manage customers and staff", "تقارير دقيقة واحترافية":"Accurate professional reports", "متعدد اللغات والعملات":"Multiple languages and currencies", "إدارة أسهل":"Simpler management", "حجوزات منظمة":"Organized bookings", "نمو مستمر":"Continuous growth", "صاحب الشركة":"Business owner", "تذكرني":"Remember me", "تسجيل الدخول":"Sign in", "إنشاء حساب جديد":"Create a new account", "إخفاء كلمة المرور":"Hide password", "إظهار كلمة المرور":"Show password", "بياناتك آمنة ومحمية بأعلى معايير الأمان":"Your data is protected with strong security standards", "الشروط والأحكام":"Terms and conditions", "سياسة الخصوصية":"Privacy policy",
     "لا يوجد رقم هاتف":"No phone number",
     "فتح ملف العميل":"Open client profile",
     "ملف العميل":"Client profile",
@@ -556,6 +556,8 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "حجوزات غير ملغاة اليوم":"неотменённых записей сегодня",
     "كثافة الجدول":"Плотность расписания",
     "أي ملاحظات إضافية...":"Дополнительные примечания...",
+    "نظرة عامة": "Обзор",
+    "حجز لم يحضر": "неявок",
   }
 };
 type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
