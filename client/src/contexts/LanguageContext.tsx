@@ -2,8 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 
-export type AppLanguage = "ar" | "en" | "ru";
-const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> = {
+export type AppLanguage = "ar" | "en" | "ru" | "fr" | "it";
+const dictionaries: Partial<Record<Exclude<AppLanguage, "ar">, Record<string, string>>> = {
+  fr: { "لوحة التحكم":"Tableau de bord","الجدول والحجوزات":"Planning et réservations","العملاء":"Clients","الخدمات":"Services","الموظفون":"Personnel","المالية":"Finances","التقارير":"Rapports","لغة المنصة":"Langue de la plateforme","تسجيل الدخول":"Se connecter","تسجيل الخروج":"Se déconnecter","حجز جديد":"Nouvelle réservation","اليوم":"Aujourd’hui","حفظ":"Enregistrer","إلغاء":"Annuler","البلد والعملة":"Pays et devise" },
+  it: { "لوحة التحكم":"Dashboard","الجدول والحجوزات":"Agenda e prenotazioni","العملاء":"Clienti","الخدمات":"Servizi","الموظفون":"Personale","المالية":"Finanze","التقارير":"Report","لغة المنصة":"Lingua della piattaforma","تسجيل الدخول":"Accedi","تسجيل الخروج":"Esci","حجز جديد":"Nuova prenotazione","اليوم":"Oggi","حفظ":"Salva","إلغاء":"Annulla","البلد والعملة":"Paese e valuta" },
   en: {
     "منصة إدارة الحجوزات":"Booking management platform","مساحة تشغيل آمنة":"Secure workspace",
     "إنشاء حساب جديد":"Create a new account","استعادة كلمة المرور":"Reset password","تعيين كلمة مرور جديدة":"Set a new password","تسجيل الدخول إلى Clientora":"Sign in to Clientora",
@@ -579,12 +581,12 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<AppLanguage>(() => {
     if (typeof window === "undefined") return "ar";
     const saved = window.localStorage.getItem("clientora-language");
-    return saved === "en" || saved === "ru" ? saved : "ar";
+    return saved === "en" || saved === "ru" || saved === "fr" || saved === "it" ? saved : "ar";
   });
   useEffect(() => { void auth.refetch(); }, [pathname]);
   useEffect(() => {
     const saved = auth.data?.language;
-    if (saved === "ar" || saved === "en" || saved === "ru") setLanguageState(saved);
+    if (saved === "ar" || saved === "en" || saved === "ru" || saved === "fr" || saved === "it") setLanguageState(saved);
   }, [auth.data?.language]);
   const setLanguage = useCallback((next: AppLanguage) => {
     setLanguageState(next);
@@ -595,7 +597,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = language;
     document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
   }, [language]);
-  const t = (arabicText: string) => language === "ar" ? arabicText : dictionaries[language][arabicText] ?? arabicText;
+  const t = (arabicText: string) => language === "ar" ? arabicText : dictionaries[language]?.[arabicText] ?? dictionaries.en?.[arabicText] ?? arabicText;
   return <LanguageContext.Provider value={{ language, setLanguage, t }}>{children}</LanguageContext.Provider>;
 }
 export function useLanguage() {
