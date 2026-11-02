@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, ne } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users } from "../drizzle/schema";
@@ -381,7 +381,7 @@ export async function listExpenses(tenantId:number,fromDate:string,toDate:string
 export async function createExpense(tenantId:number,createdBy:number,input:{category:string;description:string;vendor?:string;amount:number;date:string;paymentMethod:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(expenses).values({...input,tenantId,createdBy,vendor:input.vendor || null}); const id=Number(result[0].insertId); await db.insert(auditLogs).values({tenantId,actorUserId:createdBy,action:"expense.created",entity:"expense",entityId:id}); return (await db.select().from(expenses).where(eq(expenses.id,id)).limit(1))[0]; }
 export async function getTenantForUser(user: User) {
   const db = await getDb(); if (!db) return undefined;
-  const rows = await db.select({ tenant: tenants }).from(tenantMembers).innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id)).where(eq(tenantMembers.userId, user.id)).limit(1);
+  const rows = await db.select({ tenant: tenants }).from(tenantMembers).innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id)).where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(1);
   if (rows[0]?.tenant) return rows[0].tenant;
   if (user.role === "admin") return (await db.select().from(tenants).orderBy(desc(tenants.createdAt)).limit(1))[0];
   return undefined;
@@ -396,7 +396,7 @@ export async function getTenantAccessContext(user: User) {
     .from(tenantMembers)
     .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
     .leftJoin(staff, and(eq(staff.tenantId, tenantMembers.tenantId), eq(staff.userId, user.id), eq(staff.active, 1)))
-    .where(eq(tenantMembers.userId, user.id)).limit(1);
+    .where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(1);
   const row = rows[0];
   if (!row) return undefined;
   return { tenantId: row.tenant.id, role: row.role, staffId: row.staffId ?? null };
@@ -416,14 +416,17 @@ export async function listEmployeeBookings(tenantId:number, staffId:number, date
 export async function userCanAccessTenant(user: User, tenantId: number) {
   if (user.role === "admin") return true;
   const db = await getDb(); if (!db) return false;
-  const rows = await db.select({ id: tenantMembers.id }).from(tenantMembers).where(and(eq(tenantMembers.userId, user.id), eq(tenantMembers.tenantId, tenantId))).limit(1);
+  const rows = await db.select({ id: tenantMembers.id }).from(tenantMembers)
+    .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
+    .where(and(eq(tenantMembers.userId, user.id), eq(tenantMembers.tenantId, tenantId), ne(tenants.status, "suspended"))).limit(1);
   return rows.length > 0;
 }
 export async function userCanManageTenant(user: User, tenantId: number) {
   if (user.role === "admin") return true;
   const db = await getDb(); if (!db) return false;
   const rows = await db.select({ role: tenantMembers.role }).from(tenantMembers)
-    .where(and(eq(tenantMembers.userId, user.id), eq(tenantMembers.tenantId, tenantId))).limit(1);
+    .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
+    .where(and(eq(tenantMembers.userId, user.id), eq(tenantMembers.tenantId, tenantId), ne(tenants.status, "suspended"))).limit(1);
   return rows[0]?.role === "owner" || rows[0]?.role === "manager";
 }
 export async function getPublicBookingCatalog(slug: string) {
