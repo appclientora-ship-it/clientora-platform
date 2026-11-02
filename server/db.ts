@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users } from "../drizzle/schema";
@@ -144,7 +144,24 @@ export async function listDetailedBookings(tenantId:number,date:string,endDate?:
     .innerJoin(services, and(eq(bookings.serviceId, services.id), eq(services.tenantId, tenantId)))
     .innerJoin(staff, and(eq(bookings.staffId, staff.id), eq(staff.tenantId, tenantId)))
     .where(dateCondition).orderBy(bookings.date,bookings.startMinutes);
-  return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes, price:row.booking.totalPrice ?? row.service.price, staffName:row.staff.name}));
+  const historyEndDate = endDate ?? date;
+  const visibleClientIds = Array.from(new Set(rows.map(row => row.booking.clientId)));
+  const completedRows = visibleClientIds.length
+    ? await db.select({clientId:bookings.clientId,date:bookings.date,startMinutes:bookings.startMinutes})
+        .from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.status,"completed"),inArray(bookings.clientId,visibleClientIds),lte(bookings.date,historyEndDate)))
+    : [];
+  return rows.map(row => ({
+    ...row.booking,
+    clientName:row.client.name,
+    clientPhone:row.client.phone ?? "",
+    serviceName:row.service.name,
+    durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes,
+    price:row.booking.totalPrice ?? row.service.price,
+    staffName:row.staff.name,
+    previousVisits:completedRows.filter(visit => visit.clientId === row.booking.clientId &&
+      (visit.date < row.booking.date || (visit.date === row.booking.date && visit.startMinutes < row.booking.startMinutes))).length,
+    source:row.booking.source,
+  }));
 }
 export function isTenantPublicBookingEnabled(status: "active" | "trial" | "suspended"): boolean {
   return status !== "suspended";
