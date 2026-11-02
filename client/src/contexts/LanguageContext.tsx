@@ -237,6 +237,23 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "تعذر تحديث كلمة المرور":"Could not update the password.",
     "تعذر إنشاء الحساب":"Could not create the account.",
     "إذا كان البريد مسجلاً، ستصلك تعليمات الاستعادة.":"If that email is registered, password reset instructions will be sent to it.",
+    "لا توجد مساحة عمل نشطة":"No active workspace",
+    "تبديل الشركات غير متاح بعد؛ لا توجد آلية اختيار فرع متصلة بالحساب.":"Company switching is not available yet; no branch selector is linked to this account.",
+    "أنشئ مساحة شركة أولاً":"Create a company workspace first",
+    "تم حفظ جدول دوام الموظف":"Employee working hours saved",
+    "عام":"General",
+    "أي ملاحظات إضافية...":"Any additional notes...",
+    "جارٍ الحفظ...":"Saving...",
+    "شركاتك ومشاريعك":"Your companies and projects",
+    "أنت مالك المنصة وتتحكم في إضافة الصالونات وحالتها دون حذف بياناتها":"You own the platform and can add salons and manage their status without deleting their data",
+    "موقوف":"Suspended",
+    "تجريبي":"Trial",
+    "تفعيل":"Activate",
+    "أرشفة":"Archive",
+    "جارٍ الإنشاء...":"Creating...",
+    "إنشاء المشروع":"Create project",
+    "نظرة عامة":"Overview",
+    "كثافة الجدول":"Schedule density",
   },
   ru: {
     "منصة إدارة الحجوزات":"Платформа управления бронированием","مساحة تشغيل آمنة":"Защищённое рабочее пространство",
@@ -473,6 +490,7 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "تعذر تحديث كلمة المرور":"Не удалось обновить пароль.",
     "تعذر إنشاء الحساب":"Не удалось создать аккаунт.",
     "إذا كان البريد مسجلاً، ستصلك تعليمات الاستعادة.":"Если адрес зарегистрирован, на него будут отправлены инструкции по сбросу пароля.",
+
   }
 };
 type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
