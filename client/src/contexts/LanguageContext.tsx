@@ -494,6 +494,8 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "تعذر إنشاء الحساب":"Не удалось создать аккаунт.",
     "إذا كان البريد مسجلاً، ستصلك تعليمات الاستعادة.":"Если адрес зарегистрирован, на него будут отправлены инструкции по сбросу пароля.",
 
+    "تم إنشاء كود الدعوة ونسخه؛ أرسله للموظف":"Код приглашения создан и скопирован. Отправьте его сотруднику.",
+    "كود دعوة الموظف:":"Код приглашения сотрудника:"
   }
 };
 type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
