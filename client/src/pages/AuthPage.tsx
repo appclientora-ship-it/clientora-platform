@@ -33,7 +33,7 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
   };
   const title = t(mode === "register" ? "إنشاء حساب جديد" : mode === "forgot" ? "استعادة كلمة المرور" : mode === "reset" ? "تعيين كلمة مرور جديدة" : "مرحباً بعودتك!");
   const description = mode === "login" ? t("سجل دخولك للوصول إلى حسابك وإدارة أعمالك.") :
-    mode === "register" ? (isStaffInvite ? t("أكمل التسجيل لقبول دعوة الانضمام إلى فريق الشركة.") : t("أنشئ حساب صاحب الشركة وابدأ إعداد مساحة عملك.")) :
+    mode === "register" ? (isStaffInvite ? t("أدخل كود الدعوة الذي أرسله لك صاحب الشركة للانضمام إلى فريقه.") : t("أنشئ حساب صاحب الشركة وابدأ إعداد مساحة عملك.")) :
     mode === "forgot" ? t("سنرسل رابطاً آمناً إلى بريدك الإلكتروني.") : t("اكتب كلمة مرور جديدة لحسابك.");
   const busy = login.isPending || register.isPending || forgot.isPending || reset.isPending;
 
@@ -60,12 +60,11 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
         <div className="auth-card-brand"><span>✿</span><b>Clientora</b></div>
         <div className="auth-card-head"><h1>{title}</h1><p>{description}</p></div>
         {mode === "register" && <div className="auth-account-types" role="status">
-          <span>{isStaffInvite ? t("تسجيل موظف بدعوة من صاحب الشركة") : t("تسجيل حساب صاحب الشركة")}</span>
+          <span>{isStaffInvite ? t("موظف") : t("صاحب الشركة")}</span>
         </div>}
         <form onSubmit={submit}>
           {mode === "register" && <>
             <label className="auth-field"><UserRound size={18}/><input required value={name} onChange={e=>setName(e.target.value)} placeholder={t("الاسم الكامل")}/></label>
-            {isStaffInvite && <p className="auth-invite-notice">{t("تم فتح رابط دعوة خاص. سيتم التحقق من الدعوة عند إنشاء الحساب.")}</p>}
           </>}
           {mode !== "reset" && <label className="auth-field"><Mail size={18}/><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder={t("البريد الإلكتروني")} dir="ltr"/></label>}
           {mode !== "forgot" && <label className="auth-field"><LockKeyhole size={18}/><input required minLength={8} type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder={t("كلمة المرور (8 أحرف على الأقل)")} dir="ltr"/><button className="auth-eye" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?t("إخفاء كلمة المرور"):t("إظهار كلمة المرور")}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></label>}
