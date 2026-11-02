@@ -25,7 +25,9 @@ type SessionClaims = { userId: number; passwordFingerprint: string };
 const sign = (userId: number, expires: number, passwordFingerprint: string) => { const payload = `${userId}.${expires}.${passwordFingerprint}`; const signature = crypto.createHmac("sha256", secret()).update(payload).digest("base64url"); return `${payload}.${signature}`; };
 const readSession = (token?: string): (SessionClaims & { expires: number }) | null => {
   if (!token) return null;
-  const [id, expires, passwordFingerprint, signature] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 4) return null;
+  const [id, expires, passwordFingerprint, signature] = parts;
   const userId = Number(id);
   const expiresAt = Number(expires);
   if (!Number.isSafeInteger(userId) || userId < 1 || !Number.isSafeInteger(expiresAt) || expiresAt <= Date.now() || !/^[a-f0-9]{64}$/.test(passwordFingerprint ?? "") || !signature) return null;
