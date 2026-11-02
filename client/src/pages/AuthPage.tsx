@@ -39,7 +39,7 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
 
   return <main className="clientora-auth" dir={language === "ar" ? "rtl" : "ltr"}>
     <section className="auth-visual">
-      <div><div className="auth-brand"><span className="auth-brand-mark">✿</span><div><b>Clientora</b><small>Book · Manage · Grow</small></div></div></div>
+      <div><div className="auth-brand"><span className="auth-brand-mark">✿</span><div><b>Clientora</b><small>{t("احجز · أدر · طوّر")}</small></div></div></div>
       <div className="auth-visual-content">
         <span className="auth-kicker">{t("منصة واحدة لإدارة أعمالك")}</span>
         <h2>{t("مرحباً بك في")}<strong> Clientora</strong></h2>
