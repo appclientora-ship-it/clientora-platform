@@ -279,6 +279,7 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "مثال: المساج":"Example: Massage",
     "حفظ":"Save",
     "حجوزات غير ملغاة اليوم":"non-cancelled bookings today",
+    "حجز لم يحضر": "no-show bookings",
   },
   ru: {
     "منصة إدارة الحجوزات":"Платформа управления бронированием","مساحة تشغيل آمنة":"Защищённое рабочее пространство",
@@ -572,6 +573,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const saved = auth.data?.language;
     if (saved === "ar" || saved === "en" || saved === "ru") setLanguageState(saved);
+    "نظرة عامة": "Обзор",
+    "حجز لم يحضر": "неявок",
   }, [auth.data?.language]);
   const setLanguage = useCallback((next: AppLanguage) => {
     setLanguageState(next);
