@@ -173,7 +173,7 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "تمت إضافة الموظف":"Staff member added",
     "تم حفظ بيانات الموظف":"Staff details saved",
     "تم إنشاء كود الدعوة ونسخه؛ أرسله للموظف": "Invitation code created and copied. Share it with the employee.",
-    "كود دعوة الموظف:": "Employee invitation code:",:"Invitation code created and copied; send it to the employee",
+    "كود دعوة الموظف:": "Employee invitation code:",
     "تم حفظ البلد والعملة":"Country and currency saved",
     "تم إنشاء الحجز وحفظه في قاعدة البيانات":"Booking created and saved to the database",
     "تم حفظ تحديث الحجز":"Booking update saved",
