@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLocation } from "wouter";
 
 export type AppLanguage = "ar" | "en" | "ru";
 const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> = {
@@ -498,12 +499,14 @@ type LanguageContextValue = { language: AppLanguage; setLanguage: (language: App
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const auth = trpc.auth.me.useQuery();
+  const [pathname] = useLocation();
   const saveLanguage = trpc.auth.setLanguage.useMutation();
   const [language, setLanguageState] = useState<AppLanguage>(() => {
     if (typeof window === "undefined") return "ar";
     const saved = window.localStorage.getItem("clientora-language");
     return saved === "en" || saved === "ru" ? saved : "ar";
   });
+  useEffect(() => { void auth.refetch(); }, [pathname]);
   useEffect(() => {
     const saved = auth.data?.language;
     if (saved === "ar" || saved === "en" || saved === "ru") setLanguageState(saved);
