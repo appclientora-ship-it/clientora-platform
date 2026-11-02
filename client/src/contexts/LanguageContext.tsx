@@ -1135,7 +1135,10 @@ const dashboardTranslations: Record<Exclude<AppLanguage, "ar">, Record<string,st
     "كل حجوزاتك وفريقك وعملاؤك في مكان واحد.": "All your bookings, team and clients in one place.",
     "حجوزات هذا الأسبوع": "Bookings this week",
     "عملاء": "Clients",
-  },
+  
+    "حدث خطأ غير متوقع.": "An unexpected error occurred.",
+    "إعادة تحميل الصفحة": "Reload page",
+},
   ru: {
     "أهلاً بك 👋": "Добро пожаловать 👋",
     "إليك ملخص أداء ": "Вот сводка показателей ",
@@ -1172,7 +1175,10 @@ const dashboardTranslations: Record<Exclude<AppLanguage, "ar">, Record<string,st
     "كل حجوزاتك وفريقك وعملاؤك في مكان واحد.": "Все записи, команда и клиенты в одном месте.",
     "حجوزات هذا الأسبوع": "Записи на этой неделе",
     "عملاء": "Клиенты",
-  },
+  
+    "حدث خطأ غير متوقع.": "Произошла непредвиденная ошибка.",
+    "إعادة تحميل الصفحة": "Перезагрузить страницу",
+},
   fr: {
     "أهلاً بك 👋": "Bienvenue 👋",
     "إليك ملخص أداء ": "Voici le résumé des performances de ",
