@@ -236,6 +236,7 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "رابط الاستعادة غير صالح أو منتهي":"This password reset link is invalid or has expired.",
     "تعذر تحديث كلمة المرور":"Could not update the password.",
     "تعذر إنشاء الحساب":"Could not create the account.",
+    "إذا كان البريد مسجلاً، ستصلك تعليمات الاستعادة.":"If that email is registered, password reset instructions will be sent to it.",
   },
   ru: {
     "منصة إدارة الحجوزات":"Платформа управления бронированием","مساحة تشغيل آمنة":"Защищённое рабочее пространство",
@@ -471,6 +472,7 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "رابط الاستعادة غير صالح أو منتهي":"Ссылка для сброса пароля недействительна или срок её действия истёк.",
     "تعذر تحديث كلمة المرور":"Не удалось обновить пароль.",
     "تعذر إنشاء الحساب":"Не удалось создать аккаунт.",
+    "إذا كان البريد مسجلاً، ستصلك تعليمات الاستعادة.":"Если адрес зарегистрирован, на него будут отправлены инструкции по сбросу пароля.",
   }
 };
 type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
