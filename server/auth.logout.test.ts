@@ -14,6 +14,7 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     email: "sample@example.com",
     name: "Sample User",
     loginMethod: "password",
+    passwordHash: "must-never-reach-the-client",
     role: "user",
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -47,5 +48,29 @@ describe("auth.logout", () => {
       httpOnly: true,
       path: "/",
     });
+  });
+});
+
+describe("auth.me", () => {
+  it("returns the authenticated user without the password hash", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.auth.me();
+
+    expect(result).not.toBeNull();
+    expect(result).not.toHaveProperty("passwordHash");
+    expect(result).toMatchObject({
+      id: 1,
+      email: "sample@example.com",
+      role: "user",
+    });
+  });
+
+  it("returns null when there is no authenticated user", async () => {
+    const { ctx } = createAuthContext();
+    ctx.user = null;
+    const caller = appRouter.createCaller(ctx);
+
+    await expect(caller.auth.me()).resolves.toBeNull();
   });
 });
