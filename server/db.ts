@@ -140,7 +140,9 @@ export async function listDetailedBookings(tenantId:number,date:string,endDate?:
     ? and(eq(bookings.tenantId,tenantId),gte(bookings.date,date),lte(bookings.date,endDate))
     : and(eq(bookings.tenantId,tenantId),eq(bookings.date,date));
   const rows = await db.select({booking:bookings, client:clients, service:services, staff}).from(bookings)
-    .innerJoin(clients, eq(bookings.clientId, clients.id)).innerJoin(services, eq(bookings.serviceId, services.id)).innerJoin(staff, eq(bookings.staffId, staff.id))
+    .innerJoin(clients, and(eq(bookings.clientId, clients.id), eq(clients.tenantId, tenantId)))
+    .innerJoin(services, and(eq(bookings.serviceId, services.id), eq(services.tenantId, tenantId)))
+    .innerJoin(staff, and(eq(bookings.staffId, staff.id), eq(staff.tenantId, tenantId)))
     .where(dateCondition).orderBy(bookings.date,bookings.startMinutes);
   return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes, price:row.booking.totalPrice ?? row.service.price, staffName:row.staff.name}));
 }
