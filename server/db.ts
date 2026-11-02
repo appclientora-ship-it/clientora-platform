@@ -144,7 +144,21 @@ export async function listDetailedBookings(tenantId:number,date:string,endDate?:
     .innerJoin(services, and(eq(bookings.serviceId, services.id), eq(services.tenantId, tenantId)))
     .innerJoin(staff, and(eq(bookings.staffId, staff.id), eq(staff.tenantId, tenantId)))
     .where(dateCondition).orderBy(bookings.date,bookings.startMinutes);
-  return rows.map(row => ({...row.booking, clientName:row.client.name, clientPhone:row.client.phone ?? "", serviceName:row.service.name, durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes, price:row.booking.totalPrice ?? row.service.price, staffName:row.staff.name}));
+  const historyEndDate = endDate ?? date;
+  const completedRows = await db.select({clientId:bookings.clientId,date:bookings.date,startMinutes:bookings.startMinutes})
+    .from(bookings).where(and(eq(bookings.tenantId,tenantId),eq(bookings.status,"completed"),lte(bookings.date,historyEndDate)));
+  return rows.map(row => ({
+    ...row.booking,
+    clientName:row.client.name,
+    clientPhone:row.client.phone ?? "",
+    serviceName:row.service.name,
+    durationMinutes:row.booking.durationMinutes ?? row.service.durationMinutes,
+    price:row.booking.totalPrice ?? row.service.price,
+    staffName:row.staff.name,
+    previousVisits:completedRows.filter(visit => visit.clientId === row.booking.clientId &&
+      (visit.date < row.booking.date || (visit.date === row.booking.date && visit.startMinutes < row.booking.startMinutes))).length,
+    source:row.booking.source,
+  }));
 }
 export function isTenantPublicBookingEnabled(status: "active" | "trial" | "suspended"): boolean {
   return status !== "suspended";
