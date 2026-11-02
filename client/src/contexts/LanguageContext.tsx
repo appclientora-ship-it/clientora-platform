@@ -222,7 +222,7 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "هل تريد إلغاء حجز":"Do you want to cancel the booking for",
     "حفظ المصروف":"Save expense",
     "مثال: شراء منتجات شعر":"Example: Purchase hair products",
-    "اسم المورد (اختياري)":"Supplier name (optional)"
+    "اسم المورد (اختياري)":"Supplier name (optional)",
     "ر.ع":"OMR",
     "إلغاء الحجز":"Cancel booking",
     "اسحب لتغيير مدة الحجز":"Drag to change booking duration",
@@ -447,7 +447,7 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "هل تريد إلغاء حجز":"Вы действительно хотите отменить бронирование для",
     "حفظ المصروف":"Сохранить расход",
     "مثال: شراء منتجات شعر":"Например: покупка средств для волос",
-    "اسم المورد (اختياري)":"Название поставщика (необязательно)"
+    "اسم المورد (اختياري)":"Название поставщика (необязательно)",
     "ر.ع":"OMR",
     "إلغاء الحجز":"Отменить бронирование",
     "اسحب لتغيير مدة الحجز":"Перетащите, чтобы изменить длительность записи",
