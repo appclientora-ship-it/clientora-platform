@@ -29,7 +29,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
 
-export async function updateUserLanguage(userId: number, language: "ar" | "en" | "ru") {
+export async function updateUserLanguage(userId: number, language: "ar" | "en" | "ru" | "fr" | "it") {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
   await db.update(users).set({ language }).where(eq(users.id, userId));
