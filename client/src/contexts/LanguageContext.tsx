@@ -1498,6 +1498,70 @@ const onlineBookingTranslations: Record<Exclude<AppLanguage, "ar">, Record<strin
     "الحجز يرسل مباشرة إلى المنصة": "La prenotazione viene inviata direttamente alla piattaforma",
   },
 };
+
+const homeTranslations: Partial<Record<Exclude<AppLanguage, "ar">, Record<string, string>>> = {
+  fr: {
+    "ر.ع": "OMR", "موقوف": "Suspendu", "تجريبي": "Essai", "نشط": "Actif", "تفعيل": "Activer", "أرشفة": "Archiver",
+    "+ إضافة صالون / شركة جديدة": "+ Ajouter un salon / une entreprise", "اسم الصالون أو الشركة": "Nom du salon ou de l’entreprise",
+    "مثال: صالون روز": "Ex. : Salon Rose", "الرابط المختصر بالإنجليزية": "Lien court en anglais", "المدينة": "Ville",
+    "سيتم إنشاء مساحة مستقلة منطقياً مع بقاءك مالكاً ومشرفاً عليها.": "Un espace indépendant sera créé, dont vous resterez propriétaire et administrateur.",
+    "رجوع": "Retour", "جارٍ الإنشاء...": "Création en cours...", "إنشاء المشروع": "Créer le projet", "إدارة مركزية": "Gestion centralisée",
+    "عدّل اسم الموظف ودوره مباشرة من هنا.": "Modifiez ici le nom et le rôle du membre du personnel.",
+    "عدّل اسم الخدمة والمدة والسعر والتصنيف.": "Modifiez le nom, la durée, le prix et la catégorie du service.",
+    "هذه الوحدة أصبحت قابلة للتشغيل من داخل المنصة.": "Ce module est désormais opérationnel depuis la plateforme.",
+    "ملاحظة:": "Remarque :", "ساعات عمل": "Heures de travail", "ر.ع محصل فعلياً": "OMR réellement encaissés",
+    "ذكاء الأعمال — توصيات قابلة للتنفيذ": "Business Intelligence — recommandations concrètes",
+    "تحليل واضح مبني على حجوزات ومصروفات هذه الفترة، دون بيانات تجريبية": "Analyse fondée sur les réservations et dépenses de cette période, sans données fictives",
+    "فرق الإيراد المسجل عن المدفوع": "Écart entre le chiffre d’affaires enregistré et les paiements reçus",
+    "صافي بعد المصروفات المسجلة": "Net après les dépenses enregistrées", "ليس كشفاً محاسبياً نهائياً": "Ceci n’est pas un état comptable définitif",
+    "الخطوة المقترحة:": "Action recommandée :", "خريطة الطلب على الحجوزات": "Répartition de la demande de réservation",
+    "توزيع الحجوزات المسجلة حسب يوم الأسبوع وساعة البداية خلال الفترة المحددة": "Répartition des réservations par jour de la semaine et heure de début sur la période sélectionnée",
+    "بيانات فعلية": "Données réelles", "أكثر الأيام حجزاً": "Jour avec le plus de réservations",
+    "حجز غير ملغى": "réservations non annulées", "لا توجد بيانات كافية": "Données insuffisantes",
+    "أكثر ساعات البداية نشاطاً": "Heure de début la plus demandée", "نسبة الإلغاء": "Taux d’annulation",
+    "حجز ملغى من إجمالي الحجوزات": "réservations annulées sur le total",
+    "لا توجد حجوزات فعلية كافية لعرض توزيع الطلب في هذه الفترة.": "Pas assez de réservations réelles pour afficher la répartition de la demande sur cette période.",
+    "هذه قراءة وصفية للحجوزات غير الملغاة وليست توقعاً للمستقبل. لا نعتبر الساعات التي لا تظهر هنا ساعات متاحة؛ يلزم ربطها بساعات عمل الفريق قبل اقتراح مواعيد هادئة.": "Cette vue décrit les réservations non annulées et ne constitue pas une prévision. Les heures absentes ne sont pas nécessairement disponibles ; les horaires de travail de l’équipe doivent être pris en compte avant de proposer des créneaux calmes.",
+    "الحجوزات والحضور والإيراد حسب الفترة": "Réservations, présences et chiffre d’affaires par période",
+    "سجل مالي دائم مرتبط بالشركة": "Registre financier permanent lié à l’entreprise",
+    "إضافة مصروف أو مشتريات": "Ajouter une dépense ou un achat",
+    "سيُحفظ السجل في قاعدة بيانات الشركة ويظهر في صافي التشغيل": "Cette opération sera enregistrée dans la base de données de l’entreprise et prise en compte dans le résultat opérationnel net",
+    "مثال: شراء منتجات شعر": "Ex. : achat de produits capillaires",
+    "أي تعديل تحفظه يظهر فوراً في الجدول وقائمة الحجز الأونلاين": "Toute modification enregistrée apparaît immédiatement dans le planning et la liste de réservation en ligne",
+    "مثال: أخصائية شعر": "Ex. : spécialiste capillaire", "مثال: المساج": "Ex. : massage"
+  },
+  it: {
+    "ر.ع": "OMR", "موقوف": "Sospeso", "تجريبي": "Prova", "نشط": "Attivo", "تفعيل": "Attiva", "أرشفة": "Archivia",
+    "+ إضافة صالون / شركة جديدة": "+ Aggiungi salone / azienda", "اسم الصالون أو الشركة": "Nome del salone o dell’azienda",
+    "مثال: صالون روز": "Es.: Salone Rose", "الرابط المختصر بالإنجليزية": "Link breve in inglese", "المدينة": "Città",
+    "سيتم إنشاء مساحة مستقلة منطقياً مع بقاءك مالكاً ومشرفاً عليها.": "Verrà creato uno spazio indipendente di cui resterai proprietario e amministratore.",
+    "رجوع": "Indietro", "جارٍ الإنشاء...": "Creazione in corso...", "إنشاء المشروع": "Crea progetto", "إدارة مركزية": "Gestione centralizzata",
+    "عدّل اسم الموظف ودوره مباشرة من هنا.": "Modifica qui il nome e il ruolo del membro dello staff.",
+    "عدّل اسم الخدمة والمدة والسعر والتصنيف.": "Modifica il nome, la durata, il prezzo e la categoria del servizio.",
+    "هذه الوحدة أصبحت قابلة للتشغيل من داخل المنصة.": "Questo modulo è ora utilizzabile direttamente dalla piattaforma.",
+    "ملاحظة:": "Nota:", "ساعات عمل": "Orario di lavoro", "ر.ع محصل فعلياً": "OMR effettivamente incassati",
+    "ذكاء الأعمال — توصيات قابلة للتنفيذ": "Business intelligence — raccomandazioni operative",
+    "تحليل واضح مبني على حجوزات ومصروفات هذه الفترة، دون بيانات تجريبية": "Analisi basata su prenotazioni e spese del periodo, senza dati dimostrativi",
+    "فرق الإيراد المسجل عن المدفوع": "Differenza tra ricavi registrati e pagamenti ricevuti",
+    "صافي بعد المصروفات المسجلة": "Netto dopo le spese registrate", "ليس كشفاً محاسبياً نهائياً": "Non è un rendiconto contabile definitivo",
+    "الخطوة المقترحة:": "Azione consigliata:", "خريطة الطلب على الحجوزات": "Distribuzione della domanda di prenotazioni",
+    "توزيع الحجوزات المسجلة حسب يوم الأسبوع وساعة البداية خلال الفترة المحددة": "Distribuzione delle prenotazioni per giorno della settimana e ora di inizio nel periodo selezionato",
+    "بيانات فعلية": "Dati effettivi", "أكثر الأيام حجزاً": "Giorno con più prenotazioni",
+    "حجز غير ملغى": "prenotazioni non annullate", "لا توجد بيانات كافية": "Dati insufficienti",
+    "أكثر ساعات البداية نشاطاً": "Ora di inizio più richiesta", "نسبة الإلغاء": "Tasso di annullamento",
+    "حجز ملغى من إجمالي الحجوزات": "prenotazioni annullate sul totale",
+    "لا توجد حجوزات فعلية كافية لعرض توزيع الطلب في هذه الفترة.": "Non ci sono abbastanza prenotazioni effettive per mostrare la distribuzione della domanda in questo periodo.",
+    "هذه قراءة وصفية للحجوزات غير الملغاة وليست توقعاً للمستقبل. لا نعتبر الساعات التي لا تظهر هنا ساعات متاحة؛ يلزم ربطها بساعات عمل الفريق قبل اقتراح مواعيد هادئة.": "Questa è una descrizione delle prenotazioni non annullate, non una previsione. Le ore non mostrate non sono necessariamente disponibili: prima di suggerire fasce meno richieste occorre considerare gli orari di lavoro del team.",
+    "الحجوزات والحضور والإيراد حسب الفترة": "Prenotazioni, presenze e ricavi per periodo",
+    "سجل مالي دائم مرتبط بالشركة": "Registro finanziario permanente collegato all’azienda",
+    "إضافة مصروف أو مشتريات": "Aggiungi una spesa o un acquisto",
+    "سيُحفظ السجل في قاعدة بيانات الشركة ويظهر في صافي التشغيل": "La voce sarà salvata nel database aziendale e inclusa nel risultato operativo netto",
+    "مثال: شراء منتجات شعر": "Es.: acquisto di prodotti per capelli",
+    "أي تعديل تحفظه يظهر فوراً في الجدول وقائمة الحجز الأونلاين": "Ogni modifica salvata apparirà subito nel calendario e nell’elenco delle prenotazioni online",
+    "مثال: أخصائية شعر": "Es.: specialista capelli", "مثال: المساج": "Es.: massaggio"
+  }
+};
+
 type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 export function LanguageProvider({ children }: { children: ReactNode }) {
@@ -1523,7 +1587,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = language;
     document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
   }, [language]);
-  const t = (arabicText: string) => language === "ar" ? arabicText : onlineBookingTranslations[language]?.[arabicText] ?? dashboardTranslations[language]?.[arabicText] ?? setupCompanyTranslations[language]?.[arabicText] ?? dictionaries[language]?.[arabicText] ?? dictionaries.en?.[arabicText] ?? arabicText;
+  const t = (arabicText: string) => language === "ar" ? arabicText : onlineBookingTranslations[language]?.[arabicText] ?? dashboardTranslations[language]?.[arabicText] ?? homeTranslations[language]?.[arabicText] ?? setupCompanyTranslations[language]?.[arabicText] ?? dictionaries[language]?.[arabicText] ?? dictionaries.en?.[arabicText] ?? arabicText;
   return <LanguageContext.Provider value={{ language, setLanguage, t }}>{children}</LanguageContext.Provider>;
 }
 export function useLanguage() {
