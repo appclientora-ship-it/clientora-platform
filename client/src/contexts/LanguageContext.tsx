@@ -278,6 +278,7 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "مثال: أخصائية شعر":"Example: Hair specialist",
     "مثال: المساج":"Example: Massage",
     "حفظ":"Save",
+    "حجوزات غير ملغاة اليوم":"non-cancelled bookings today",
   },
   ru: {
     "منصة إدارة الحجوزات":"Платформа управления бронированием","مساحة تشغيل آمنة":"Защищённое рабочее пространство",
@@ -551,6 +552,9 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "تبديل الشركات غير متاح بعد؛ لا توجد آلية اختيار فرع متصلة بالحساب.":"Переключение компаний пока недоступно: выбор филиала не подключён к аккаунту.",
     "أنشئ مساحة شركة أولاً":"Сначала создайте рабочее пространство компании",
     "تم حفظ جدول دوام الموظف":"График работы сотрудника сохранён",
+    "حجوزات غير ملغاة اليوم":"неотменённых записей сегодня",
+    "كثافة الجدول":"Плотность расписания",
+    "أي ملاحظات إضافية...":"Дополнительные примечания...",
   }
 };
 type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
