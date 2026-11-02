@@ -9,7 +9,7 @@ import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordR
 export const appRouter = router({
   system: router({ health: publicProcedure.query(() => ({ ok: true })) }),
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query(({ ctx }) => { if (!ctx.user) return null; const { passwordHash: _passwordHash, ...safeUser } = ctx.user; return safeUser; }),
     setLanguage: protectedProcedure.input(z.object({language:z.enum(["ar","en","ru"])})).mutation(({ctx,input}) => updateUserLanguage(ctx.user.id,input.language)),
     logout: publicProcedure.mutation(({ ctx }) => { ctx.res.clearCookie(localSessionCookie, { ...getSessionCookieOptions(ctx.req), maxAge: 0 }); return { success: true } as const; }),
     register: registrationProcedure.input(z.object({name:z.string().min(2).max(160),email:z.string().email(),password:z.string().min(8).max(128),inviteCode:z.string().min(20).max(64).optional()})).mutation(async ({ctx,input}) => { try { const user=await registerLocalUser(input); ctx.res.cookie(localSessionCookie,sessionForUser(user),{...getSessionCookieOptions(ctx.req),maxAge:30*24*60*60*1000}); const {passwordHash: _passwordHash, ...safeUser}=user; return safeUser; } catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر إنشاء الحساب"}); } }),
