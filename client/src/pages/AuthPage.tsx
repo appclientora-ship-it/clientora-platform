@@ -29,7 +29,7 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
     if (mode === "register") register.mutate({ name, email, password, ...(accountType === "staff" ? { inviteCode } : {}) });
     else if (mode === "forgot") forgot.mutate({ email });
     else if (mode === "reset") reset.mutate({ token: query.get("token") || "", password });
-    else login.mutate({ email, password });
+    else login.mutate({ email, password, remember });
   };
   const title = t(mode === "register" ? "إنشاء حساب جديد" : mode === "forgot" ? "استعادة كلمة المرور" : mode === "reset" ? "تعيين كلمة مرور جديدة" : "مرحباً بعودتك!");
   const description = mode === "login" ? t("سجل دخولك للوصول إلى حسابك وإدارة أعمالك.") :
