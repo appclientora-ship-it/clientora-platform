@@ -283,7 +283,7 @@ function ReportsPanel({tenantId}:{tenantId?:number}) {
   const reports=trpc.workspace.reports.useQuery({tenantId:tenantId??0,fromDate,toDate},{enabled:Boolean(tenantId)}); const expensesQuery=trpc.workspace.expenses.useQuery({tenantId:tenantId??0,fromDate,toDate},{enabled:Boolean(tenantId)});
   const add=trpc.workspace.addExpense.useMutation({onSuccess:()=>{expensesQuery.refetch();setOpen(false);setDescription("");setVendor("");setAmount("");},onError:e=>window.alert(e.message)});
   const totals=reports.data?.totals??{bookings:0,completed:0,cancelled:0,revenue:0,paidRevenue:0}; const expenseTotal=(expensesQuery.data??[]).reduce((sum,item)=>sum+item.amount,0); const insights=buildBusinessInsights({...totals,expenseTotal,employees:reports.data?.employees??[]});
-  const weekdayNames=["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+  const weekdayNames=["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"].map(day=>t(day));
   const demand=reports.data?.demand;
   const observedDays=(demand?.days??[]).filter(day=>day.bookings>0);
   const peakDay=[...observedDays].sort((a,b)=>b.bookings-a.bookings)[0];
