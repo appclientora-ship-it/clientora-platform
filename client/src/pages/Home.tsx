@@ -87,16 +87,16 @@ export default function Home() {
   const createServiceMutation = trpc.workspace.createService.useMutation({onSuccess:()=>{servicesQuery.refetch();setNewServiceOpen(false);notify(t("تمت إضافة الخدمة وحفظها"));},onError:error=>notify(t(error.message))});
   const updateServiceMutation = trpc.workspace.updateService.useMutation({onSuccess:()=>{servicesQuery.refetch();setEditEntity(null);notify(t("تم حفظ تعديلات الخدمة"));},onError:error=>notify(t(error.message))});
   const addStaffMutation = trpc.workspace.addStaff.useMutation({onSuccess:()=>{staffQuery.refetch();setEditEntity(null);notify(t("تمت إضافة الموظف"));},onError:error=>notify(t(error.message))});
-  const updateStaffMutation = trpc.workspace.updateStaff.useMutation({onSuccess:()=>{staffQuery.refetch();setEditEntity(null);notify(t("تم حفظ بيانات الموظف"));},onError:error=>notify(error.message)});
-  const createInviteMutation = trpc.workspace.createInvite.useMutation({onSuccess:invite=>{if(navigator.clipboard?.writeText){navigator.clipboard.writeText(invite.code).then(()=>notify(t("تم إنشاء كود الدعوة ونسخه؛ أرسله للموظف"))).catch(()=>notify(t("كود دعوة الموظف:")+" "+invite.code));}else notify(t("كود دعوة الموظف:")+" "+invite.code);},onError:error=>notify(error.message)});
+  const updateStaffMutation = trpc.workspace.updateStaff.useMutation({onSuccess:()=>{staffQuery.refetch();setEditEntity(null);notify(t("تم حفظ بيانات الموظف"));},onError:error=>notify(t(error.message))});
+  const createInviteMutation = trpc.workspace.createInvite.useMutation({onSuccess:invite=>{if(navigator.clipboard?.writeText){navigator.clipboard.writeText(invite.code).then(()=>notify(t("تم إنشاء كود الدعوة ونسخه؛ أرسله للموظف"))).catch(()=>notify(t("كود دعوة الموظف:")+" "+invite.code));}else notify(t("كود دعوة الموظف:")+" "+invite.code);},onError:error=>notify(t(error.message))});
   const notificationsQuery = trpc.workspace.notifications.useQuery({tenantId:tenantId ?? 0},{enabled:Boolean(tenantId)&&accessContextQuery.isSuccess&&accessContextQuery.data?.role!=="staff",refetchInterval:30000});
   const updateSettings = trpc.workspace.updateSettings.useMutation({onSuccess:()=>notify(t("تم حفظ البلد والعملة"))});
-  const createBookingMutation = trpc.workspace.createBooking.useMutation({onSuccess:()=>{bookingsQuery.refetch();notificationsQuery.refetch();setModal(null);notify(t("تم إنشاء الحجز وحفظه في قاعدة البيانات"));},onError:error=>notify(error.message)});
+  const createBookingMutation = trpc.workspace.createBooking.useMutation({onSuccess:()=>{bookingsQuery.refetch();notificationsQuery.refetch();setModal(null);notify(t("تم إنشاء الحجز وحفظه في قاعدة البيانات"));},onError:error=>notify(t(error.message))});
   const notify = (message:string) => { setToast(message); window.setTimeout(() => setToast(""), 2400); };
 
   useEffect(() => { const timer = window.setInterval(() => setCurrentTime(new Date()), 30000); return () => window.clearInterval(timer); }, []);
-  const bookingUpdate = trpc.workspace.updateBooking.useMutation({onSuccess:()=>{bookingsQuery.refetch();notificationsQuery.refetch();notify(t("تم حفظ تحديث الحجز"));},onError:error=>notify(error.message)});
-  const logoutMutation = trpc.auth.logout.useMutation({onSuccess:()=>window.location.assign("/login"),onError:error=>notify(error.message)});
+  const bookingUpdate = trpc.workspace.updateBooking.useMutation({onSuccess:()=>{bookingsQuery.refetch();notificationsQuery.refetch();notify(t("تم حفظ تحديث الحجز"));},onError:error=>notify(t(error.message))});
+  const logoutMutation = trpc.auth.logout.useMutation({onSuccess:()=>window.location.assign("/login"),onError:error=>notify(t(error.message))});
   const selected = bookings.find(b => b.id === selectedId) ?? null;
   const locale = language === "en" ? "en-GB" : language === "ru" ? "ru-RU" : "ar-OM";
   const weekLocale = locale;
@@ -281,7 +281,7 @@ function ReportsPanel({tenantId}:{tenantId?:number}) {
   const now=useMemo(()=>new Date(),[]); const fromDate=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`; const toDate=isoDate(now);
   const [open,setOpen]=useState(false); const [category,setCategory]=useState("مشتريات"); const [description,setDescription]=useState(""); const [vendor,setVendor]=useState(""); const [amount,setAmount]=useState(""); const [paymentMethod,setPaymentMethod]=useState("نقدي");
   const reports=trpc.workspace.reports.useQuery({tenantId:tenantId??0,fromDate,toDate},{enabled:Boolean(tenantId)}); const expensesQuery=trpc.workspace.expenses.useQuery({tenantId:tenantId??0,fromDate,toDate},{enabled:Boolean(tenantId)});
-  const add=trpc.workspace.addExpense.useMutation({onSuccess:()=>{expensesQuery.refetch();setOpen(false);setDescription("");setVendor("");setAmount("");},onError:e=>window.alert(e.message)});
+  const add=trpc.workspace.addExpense.useMutation({onSuccess:()=>{expensesQuery.refetch();setOpen(false);setDescription("");setVendor("");setAmount("");},onError:e=>window.alert(t(e.message))});
   const totals=reports.data?.totals??{bookings:0,completed:0,cancelled:0,revenue:0,paidRevenue:0}; const expenseTotal=(expensesQuery.data??[]).reduce((sum,item)=>sum+item.amount,0); const insights=buildBusinessInsights({...totals,expenseTotal,employees:reports.data?.employees??[]});
   const weekdayNames=["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"].map(day=>t(day));
   const demand=reports.data?.demand;
