@@ -22,19 +22,6 @@ const languageName:Record<Language,string> = {ar:"العربية",en:"English",r
 const countryOptions=[{code:"OM",name:"سلطنة عُمان",currency:"ر.ع"},{code:"AE",name:"الإمارات",currency:"د.إ"},{code:"SA",name:"السعودية",currency:"ر.س"},{code:"QA",name:"قطر",currency:"ر.ق"},{code:"KW",name:"الكويت",currency:"د.ك"},{code:"BH",name:"البحرين",currency:"د.ب"},{code:"EG",name:"مصر",currency:"ج.م"}];
 const navTranslation:Record<string,Record<Language,string>> = {dashboard:{ar:"لوحة التحكم",en:"Dashboard",ru:"Панель управления"},schedule:{ar:"الجدول والحجوزات",en:"Schedule & Bookings",ru:"Расписание и бронирования"},clients:{ar:"العملاء",en:"Clients",ru:"Клиенты"},services:{ar:"الخدمات",en:"Services",ru:"Услуги"},staff:{ar:"الموظفون",en:"Staff",ru:"Сотрудники"},finance:{ar:"المالية",en:"Finance",ru:"Финансы"},reports:{ar:"التقارير",en:"Reports",ru:"Отчёты"}};
 
-const initialServices: Service[] = [
-  {id:1,name:"قص وتصفيف شعر",duration:60,price:60,category:"حلاقة وصبغ الشعر"},
-  {id:2,name:"صبغة شعر كاملة",duration:90,price:120,category:"حلاقة وصبغ الشعر"},
-  {id:3,name:"تحديد ولحية الدقن",duration:45,price:30,category:"الدقن"},
-  {id:4,name:"صبغة الدقن",duration:30,price:25,category:"الدقن"},
-  {id:5,name:"تريتمنت وترطيب الشعر",duration:60,price:85,category:"التريتمنت"},
-  {id:6,name:"بدكير",duration:60,price:55,category:"البدكير والمانيكير"},
-  {id:7,name:"مانيكير",duration:45,price:40,category:"البدكير والمانيكير"},
-  {id:8,name:"فيشال وتنظيف بشرة",duration:60,price:110,category:"الفيشال"},
-  {id:9,name:"مساج استرخائي",duration:60,price:90,category:"المساج"},
-  {id:10,name:"فوت سبا",duration:45,price:45,category:"فوت سبا"},
-  {id:11,name:"حمام مغربي",duration:90,price:100,category:"الحمام المغربي"},
-];
 const navDefaults: NavItem[] = [
   { id:"dashboard", label:"لوحة التحكم", icon:LayoutDashboard, iconKey:"dashboard" },
   { id:"schedule", label:"الجدول والحجوزات", icon:CalendarDays, iconKey:"calendar" },
@@ -48,21 +35,6 @@ const iconLibrary: {key:string; icon:LucideIcon}[] = [
   {key:"dashboard", icon:LayoutDashboard}, {key:"calendar", icon:CalendarDays}, {key:"users", icon:Users},
   {key:"wallet", icon:WalletCards}, {key:"person", icon:UserRound}, {key:"money", icon:CircleDollarSign}, {key:"file", icon:FileText},
 ];
-const seed: Booking[] = [
-  {id:1,client:"عائشة محمد",phone:"+968 9611 2345",service:"قص وتصفيف",staff:1,start:540,duration:60,price:60,status:"arrived",paid:true,note:"تفضل نفس القصة السابقة"},
-  {id:2,client:"رنا علي",phone:"+968 9900 4421",service:"صبغة شعر",staff:1,start:620,duration:100,price:120,status:"confirmed",paid:false,note:""},
-  {id:3,client:"سارة إبراهيم",phone:"+968 9221 1002",service:"مانيكير وبدكير",staff:1,start:750,duration:60,price:80,status:"confirmed",paid:false,note:""},
-  {id:4,client:"داليا فارس",phone:"+968 9012 8822",service:"صبغة شعر",staff:1,start:980,duration:70,price:120,status:"cancelled",paid:false,note:""},
-  {id:5,client:"محمد صالح",phone:"+968 9781 2200",service:"تحديد ذقن",staff:2,start:570,duration:45,price:30,status:"arrived",paid:true,note:""},
-  {id:6,client:"خالد الشحري",phone:"+968 9333 1881",service:"قص شعر",staff:2,start:660,duration:50,price:50,status:"confirmed",paid:false,note:""},
-  {id:7,client:"يوسف أحمد",phone:"+968 9111 7790",service:"قص شعر",staff:2,start:840,duration:45,price:45,status:"no_show",paid:false,note:""},
-  {id:8,client:"نور إبراهيم",phone:"+968 9000 2311",service:"مساج استرخائي",staff:3,start:600,duration:60,price:90,status:"arrived",paid:true,note:""},
-  {id:9,client:"لمى الفارسي",phone:"+968 9998 0011",service:"حمام مغربي",staff:3,start:900,duration:90,price:100,status:"arrived",paid:true,note:""},
-  {id:10,client:"رنا خالد",phone:"+968 9222 2888",service:"مانيكير وبدكير",staff:4,start:570,duration:60,price:70,status:"confirmed",paid:true,note:""},
-  {id:11,client:"ندى إبراهيم",phone:"+968 9555 1122",service:"تنظيف بشرة",staff:5,start:630,duration:90,price:110,status:"new",paid:false,note:""},
-  {id:12,client:"ريم خالد",phone:"+968 9444 5512",service:"تنظيف بشرة",staff:5,start:720,duration:60,price:70,status:"arrived",paid:true,note:""},
-  {id:13,client:"فاطمة الزهراء",phone:"+968 9666 4455",service:"عناية بالوجه",staff:5,start:840,duration:60,price:100,status:"confirmed",paid:false,note:""},
-];
 const statusMeta: Record<Status,{label:string; className:string}> = {
   new:{label:"جديد",className:"status-new"}, confirmed:{label:"مؤكد",className:"status-confirmed"}, arrived:{label:"حضر",className:"status-arrived"}, completed:{label:"مكتمل",className:"status-completed"}, cancelled:{label:"ملغي",className:"status-cancelled"}, no_show:{label:"لم يحضر",className:"status-no-show"},
 };
@@ -75,7 +47,6 @@ const isoDate = (date:Date, timeZone?:string) => {
   return `${values.year}-${values.month}-${values.day}`;
 };
 const bookingFromDatabase = (row:{id:number;date:string;clientName:string;clientPhone:string;serviceName:string;staffId:number;startMinutes:number;durationMinutes:number;price:number;status:Status;paid:number;note:string|null}):Booking => ({id:row.id,date:row.date,client:row.clientName,phone:row.clientPhone,service:row.serviceName,staff:row.staffId,start:row.startMinutes,duration:row.durationMinutes,price:row.price,status:row.status,paid:Boolean(row.paid),note:row.note ?? ""});
-const notificationText = (action:string) => action === "booking.created" ? "وصل حجز أونلاين جديد" : action === "booking.cancelled" ? "تم إلغاء حجز" : action === "booking.paid" ? "تم تسجيل دفعة حجز" : "تم تحديث حجز";
 
 export default function Home() {
   const [active, setActive] = useState("dashboard");
