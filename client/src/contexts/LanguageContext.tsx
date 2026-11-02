@@ -1529,7 +1529,12 @@ const homeTranslations: Partial<Record<Exclude<AppLanguage, "ar">, Record<string
     "مثال: شراء منتجات شعر": "Ex. : achat de produits capillaires",
     "أي تعديل تحفظه يظهر فوراً في الجدول وقائمة الحجز الأونلاين": "Toute modification enregistrée apparaît immédiatement dans le planning et la liste de réservation en ligne",
     "مثال: أخصائية شعر": "Ex. : spécialiste capillaire", "مثال: المساج": "Ex. : massage"
-  },
+  
+    "الصفحة غير موجودة": "Page introuvable",
+    "عذراً، الصفحة التي تبحث عنها غير موجودة.": "Désolé, la page que vous recherchez est introuvable.",
+    "ربما تم نقلها أو حذفها.": "Elle a peut-être été déplacée ou supprimée.",
+    "العودة للرئيسية": "Retour à l’accueil",
+},
   it: {
     "ر.ع": "OMR", "موقوف": "Sospeso", "تجريبي": "Prova", "نشط": "Attivo", "تفعيل": "Attiva", "أرشفة": "Archivia",
     "+ إضافة صالون / شركة جديدة": "+ Aggiungi salone / azienda", "اسم الصالون أو الشركة": "Nome del salone o dell’azienda",
@@ -1559,7 +1564,12 @@ const homeTranslations: Partial<Record<Exclude<AppLanguage, "ar">, Record<string
     "مثال: شراء منتجات شعر": "Es.: acquisto di prodotti per capelli",
     "أي تعديل تحفظه يظهر فوراً في الجدول وقائمة الحجز الأونلاين": "Ogni modifica salvata apparirà subito nel calendario e nell’elenco delle prenotazioni online",
     "مثال: أخصائية شعر": "Es.: specialista capelli", "مثال: المساج": "Es.: massaggio"
-  }
+  
+    "الصفحة غير موجودة": "Pagina non trovata",
+    "عذراً، الصفحة التي تبحث عنها غير موجودة.": "Spiacenti, la pagina che cerchi non è stata trovata.",
+    "ربما تم نقلها أو حذفها.": "Potrebbe essere stata spostata o eliminata.",
+    "العودة للرئيسية": "Torna alla home",
+}
 };
 
 type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
@@ -1587,7 +1597,24 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = language;
     document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
   }, [language]);
-  const t = (arabicText: string) => language === "ar" ? arabicText : onlineBookingTranslations[language]?.[arabicText] ?? dashboardTranslations[language]?.[arabicText] ?? homeTranslations[language]?.[arabicText] ?? setupCompanyTranslations[language]?.[arabicText] ?? dictionaries[language]?.[arabicText] ?? dictionaries.en?.[arabicText] ?? arabicText;
+  const t = (arabicText: string) => {
+    if (language === "ar") return arabicText;
+    const translated = onlineBookingTranslations[language]?.[arabicText]
+      ?? dashboardTranslations[language]?.[arabicText]
+      ?? homeTranslations[language]?.[arabicText]
+      ?? setupCompanyTranslations[language]?.[arabicText]
+      ?? dictionaries[language]?.[arabicText];
+    if (translated) return translated;
+    // Never silently fall back to Arabic or English: make missing UI copy visible during QA.
+    const missingLabel: Record<AppLanguage, string> = {
+      ar: "ترجمة مفقودة",
+      en: "Translation missing",
+      ru: "Перевод отсутствует",
+      fr: "Traduction manquante",
+      it: "Traduzione mancante",
+    };
+    return `[${missingLabel[language]}]`;
+  };
   return <LanguageContext.Provider value={{ language, setLanguage, t }}>{children}</LanguageContext.Provider>;
 }
 export function useLanguage() {
