@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import mysql from "mysql2/promise";
 import { afterAll, describe, expect, it } from "vitest";
-import { consumeTelegramLinkCode, createDashboardBooking, createPublicBooking, createTelegramLinkCode } from "./db";
+import { consumeTelegramLinkCode, createDashboardBooking, createPublicBooking, createTelegramLinkCode, listDetailedBookings } from "./db";
 
 const databaseUrl = process.env.DATABASE_URL;
 const integrationEnabled = process.env.RUN_MYSQL_INTEGRATION === "1" && Boolean(databaseUrl);
@@ -217,5 +217,41 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
       [tenantId, staffId, date, 600],
     );
     expect(rows).toHaveLength(1);
+
+  it("does not return a tenant booking when its related client, service, and staff belong to another tenant", async () => {
+    const connection = await connectionPromise;
+    const unique = randomUUID().replace(/-/g, "").slice(0, 20);
+    const [tenantAResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO tenants (name, slug, status, city, countryCode, currency, timezone, defaultLanguage) VALUES (?, ?, 'trial', 'Muscat', 'OM', 'OMR', 'Asia/Muscat', 'en')",
+      ["Tenant A", `tenant-a-${unique}`],
+    );
+    const tenantA = tenantAResult.insertId;
+    createdTenantIds.push(tenantA);
+    const [tenantBResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO tenants (name, slug, status, city, countryCode, currency, timezone, defaultLanguage) VALUES (?, ?, 'trial', 'Muscat', 'OM', 'OMR', 'Asia/Muscat', 'en')",
+      ["Tenant B", `tenant-b-${unique}`],
+    );
+    const tenantB = tenantBResult.insertId;
+    createdTenantIds.push(tenantB);
+
+    const [staffResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO staff (tenantId, name, role, active) VALUES (?, 'Foreign Staff', 'Stylist', 1)",
+      [tenantB],
+    );
+    const [serviceResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO services (tenantId, name, category, durationMinutes, price, active) VALUES (?, 'Foreign Service', 'Test', 30, 1000, 1)",
+      [tenantB],
+    );
+    const [clientResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO clients (tenantId, name, phone) VALUES (?, 'Foreign Client', '+96890000000')",
+      [tenantB],
+    );
+    await connection.execute(
+      "INSERT INTO bookings (tenantId, clientId, staffId, serviceId, date, startMinutes, durationMinutes, totalPrice, status, source, paid) VALUES (?, ?, ?, ?, '2099-04-15', 600, 30, 1000, 'new', 'dashboard', 0)",
+      [tenantA, clientResult.insertId, staffResult.insertId, serviceResult.insertId],
+    );
+
+    await expect(listDetailedBookings(tenantA, "2099-04-15")).resolves.toEqual([]);
+  });
   });
 });
