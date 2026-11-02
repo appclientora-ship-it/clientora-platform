@@ -37,9 +37,9 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
     mode === "forgot" ? t("سنرسل رابطاً آمناً إلى بريدك الإلكتروني.") : t("اكتب كلمة مرور جديدة لحسابك.");
   const busy = login.isPending || register.isPending || forgot.isPending || reset.isPending;
 
-  return <main className="auth-page clientora-auth" dir={language === "ar" ? "rtl" : "ltr"}>
+  return <main className="clientora-auth" dir={language === "ar" ? "rtl" : "ltr"}>
     <section className="auth-visual">
-      <div className="auth-visual-top"><div className="auth-brand"><span className="auth-brand-mark">✿</span><div><b>Clientora</b><small>Book · Manage · Grow</small></div></div></div>
+      <div><div className="auth-brand"><span className="auth-brand-mark">✿</span><div><b>Clientora</b><small>Book · Manage · Grow</small></div></div></div>
       <div className="auth-visual-content">
         <span className="auth-kicker">{t("منصة واحدة لإدارة أعمالك")}</span>
         <h2>{t("مرحباً بك في")}<strong> Clientora</strong></h2>
