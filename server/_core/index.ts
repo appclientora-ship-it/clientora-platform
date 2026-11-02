@@ -9,6 +9,9 @@ import { handleTelegramWebhook } from "../telegramBot";
 
 async function startServer() {
   const app = express();
+  // Render terminates public traffic at one trusted reverse proxy in production.
+  // Keep proxy headers untrusted during local development.
+  app.set("trust proxy", process.env.NODE_ENV === "production" ? 1 : 0);
   const server = createServer(app);
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
