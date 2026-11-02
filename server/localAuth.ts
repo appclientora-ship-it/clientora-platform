@@ -5,7 +5,8 @@ import { getDb } from "./db";
 import { passwordResets, users, staffInvites, tenantMembers, staff, type User } from "../drizzle/schema";
 
 const SESSION_COOKIE = "clientora_session";
-const SESSION_TTL = 1000 * 60 * 60 * 24 * 30;
+const REMEMBERED_SESSION_TTL = 1000 * 60 * 60 * 24 * 30;
+const SESSION_TTL = 1000 * 60 * 60 * 12;
 const secret = () => {
   const value = process.env.AUTH_SESSION_SECRET;
   if (!value || value.length < 32) throw new Error("AUTH_SESSION_SECRET must be configured with at least 32 characters");
@@ -26,7 +27,7 @@ const readSession = (token?: string) => { if (!token) return null; const [id, ex
   const calculated = Buffer.from(expected);
   return supplied.length === calculated.length && crypto.timingSafeEqual(supplied, calculated) ? userId : null; };
 export const localSessionCookie = SESSION_COOKIE;
-export function sessionForUser(userId: number) { return sign(userId, Date.now() + SESSION_TTL); }
+export function sessionForUser(userId: number, remember = true) { return sign(userId, Date.now() + (remember ? REMEMBERED_SESSION_TTL : SESSION_TTL)); }
 export function userIdFromSession(token?: string) { return readSession(token); }
 export async function findLocalUserById(id: number) { const db = await getDb(); if (!db) return undefined; return (await db.select().from(users).where(eq(users.id, id)).limit(1))[0]; }
 export function assertEmailRegistrationAllowed(existingUser: Pick<User, "passwordHash"> | undefined): void {
