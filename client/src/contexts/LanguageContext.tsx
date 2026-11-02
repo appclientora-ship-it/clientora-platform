@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { trpc } from "@/lib/trpc";
 
 export type AppLanguage = "ar" | "en" | "ru";
 const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> = {
@@ -496,11 +497,21 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
 type LanguageContextValue = { language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (arabicText: string) => string };
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<AppLanguage>(() => {
+  const auth = trpc.auth.me.useQuery();
+  const saveLanguage = trpc.auth.setLanguage.useMutation();
+  const [language, setLanguageState] = useState<AppLanguage>(() => {
     if (typeof window === "undefined") return "ar";
     const saved = window.localStorage.getItem("clientora-language");
     return saved === "en" || saved === "ru" ? saved : "ar";
   });
+  useEffect(() => {
+    const saved = auth.data?.language;
+    if (saved === "ar" || saved === "en" || saved === "ru") setLanguageState(saved);
+  }, [auth.data?.language]);
+  const setLanguage = useCallback((next: AppLanguage) => {
+    setLanguageState(next);
+    if (auth.data?.id) saveLanguage.mutate({ language: next });
+  }, [auth.data?.id, saveLanguage]);
   useEffect(() => {
     window.localStorage.setItem("clientora-language", language);
     document.documentElement.lang = language;
