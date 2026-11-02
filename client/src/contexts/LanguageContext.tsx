@@ -1221,6 +1221,8 @@ const dashboardTranslations: Record<Exclude<AppLanguage, "ar">, Record<string,st
     "عملاء": "Clients",
   
     "احجز · أدر · طوّر": "Réservez · Gérez · Développez",
+
+    "تعديل": "Modifier",
 },
   it: {
     "أهلاً بك 👋": "Benvenuto 👋",
@@ -1260,6 +1262,8 @@ const dashboardTranslations: Record<Exclude<AppLanguage, "ar">, Record<string,st
     "عملاء": "Clienti",
   
     "احجز · أدر · طوّر": "Prenota · Gestisci · Cresci",
+
+    "تعديل": "Modifica",
 },
 };
 const onlineBookingTranslations: Record<Exclude<AppLanguage, "ar">, Record<string,string>> = {
