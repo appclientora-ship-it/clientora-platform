@@ -32,6 +32,23 @@ describe("public booking idempotency key validation", () => {
     await expect(createPublicBooking({ ...validInput, idempotencyKey: "  valid-key  " }))
       .rejects.toThrow("Company not found");
   });
+
+  it("rejects client names longer than the database column", async () => {
+    await expect(createPublicBooking({ ...validInput, clientName: "A".repeat(161) }))
+      .rejects.toThrow("160");
+  });
+
+  it("rejects phone numbers longer than the database column", async () => {
+    await expect(createPublicBooking({ ...validInput, phone: "1".repeat(41) }))
+      .rejects.toThrow("رقم الهاتف غير صالح");
+  });
+
+  it("rejects oversized notes and service lists before database access", async () => {
+    await expect(createPublicBooking({ ...validInput, note: "x".repeat(501) }))
+      .rejects.toThrow("ملاحظات الحجز");
+    await expect(createPublicBooking({ ...validInput, serviceIds: Array.from({length: 21}, (_, index) => index + 1) }))
+      .rejects.toThrow("20 خدمة");
+  });
 });
 
 

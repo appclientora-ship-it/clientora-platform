@@ -580,17 +580,26 @@ export async function getSmartScheduleSuggestions(input:{tenantId:number;service
 }
 
 export async function createPublicBooking(input: {slug:string; clientName:string; phone:string; serviceId:number; serviceIds?:number[]; staffId:number; date:string; startMinutes:number; note?:string; idempotencyKey:string}) {
+  const slug = input.slug.trim();
+  const clientName = input.clientName.trim();
+  const phone = input.phone.trim();
+  const note = input.note?.trim() ?? "";
   const idempotencyKey = input.idempotencyKey.trim();
+  if (slug.length < 2 || slug.length > 120) throw new Error("رابط الشركة غير صالح");
+  if (clientName.length < 2 || clientName.length > 160) throw new Error("اسم العميل يجب أن يكون بين حرفين و160 حرفاً");
+  if (phone.length < 5 || phone.length > 40) throw new Error("رقم الهاتف غير صالح");
+  if (note.length > 500) throw new Error("ملاحظات الحجز تتجاوز الحد المسموح");
   if (!idempotencyKey || idempotencyKey.length > 64) {
     throw new Error("مفتاح الحجز غير صالح");
   }
-  const normalizedRequest = { slug:input.slug, clientName:input.clientName.trim(), phone:input.phone.trim(), serviceIds:Array.from(new Set(input.serviceIds?.length ? input.serviceIds : [input.serviceId])), staffId:input.staffId, date:input.date, startMinutes:input.startMinutes, note:input.note ?? "" };
+  if (input.serviceIds && input.serviceIds.length > 20) throw new Error("يمكن اختيار 20 خدمة كحد أقصى");
+  const normalizedRequest = { slug, clientName, phone, serviceIds:Array.from(new Set(input.serviceIds?.length ? input.serviceIds : [input.serviceId])), staffId:input.staffId, date:input.date, startMinutes:input.startMinutes, note };
   const requestHash = createHash("sha256").update(JSON.stringify(normalizedRequest)).digest("hex");
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   return db.transaction(async tx => {
-  await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug,input.slug)).for("update");
+  await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug,slug)).for("update");
 
-  const tenantRows = await tx.select().from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
+  const tenantRows = await tx.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
   const tenant = tenantRows[0]; if (!tenant) throw new Error("Company not found");
   const previousRows = await tx.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.idempotencyKey, idempotencyKey))).limit(1);
   if (previousRows[0]) {
@@ -622,17 +631,17 @@ export async function createPublicBooking(input: {slug:string; clientName:string
   if (hasStaffBreakConflict(breakRows,{startMinutes:input.startMinutes,durationMinutes:totalDuration})) throw new Error("الموعد يتعارض مع فترة استراحة الموظف، اختر وقتاً آخر");
   const overlaps = hasBookingConflict(existing, {startMinutes:input.startMinutes, durationMinutes:totalDuration});
   if (overlaps) throw new Error("هذا الوقت محجوز بالفعل، اختر وقتاً آخر");
-  const clientRows = await tx.select().from(clients).where(and(eq(clients.tenantId, tenant.id), eq(clients.phone, input.phone))).limit(1);
+  const clientRows = await tx.select().from(clients).where(and(eq(clients.tenantId, tenant.id), eq(clients.phone, phone))).limit(1);
   let clientId = clientRows[0]?.id;
   if (!clientId) {
-    const result = await tx.insert(clients).values({tenantId:tenant.id, name:input.clientName, phone:input.phone, visits:0, totalSpent:0, lastVisit:input.date});
+    const result = await tx.insert(clients).values({tenantId:tenant.id, name:clientName, phone, visits:0, totalSpent:0, lastVisit:input.date});
     clientId = Number(result[0].insertId);
   }
-  const result = await tx.insert(bookings).values({tenantId:tenant.id, clientId, staffId:input.staffId, serviceId:selectedServices[0].id, date:input.date, startMinutes:input.startMinutes, durationMinutes:totalDuration, totalPrice, status:"new", source:"online", paid:0, note:input.note ?? null, idempotencyKey, requestHash});
+  const result = await tx.insert(bookings).values({tenantId:tenant.id, clientId, staffId:input.staffId, serviceId:selectedServices[0].id, date:input.date, startMinutes:input.startMinutes, durationMinutes:totalDuration, totalPrice, status:"new", source:"online", paid:0, note:note || null, idempotencyKey, requestHash});
   const bookingId = Number(result[0].insertId);
   await tx.insert(bookingItems).values(selectedServices.map(item => ({tenantId:tenant.id,bookingId,serviceId:item.id,staffId:input.staffId,durationMinutes:item.durationMinutes,price:item.price})));
   await tx.insert(auditLogs).values({tenantId:tenant.id,actorUserId:null,action:"booking.created",entity:"booking",entityId:bookingId});
-  await tx.insert(notifications).values({tenantId:tenant.id,recipientStaffId:input.staffId,type:"booking.created",title:"حجز أونلاين جديد",body:`تم حجز ${selectedServices.map(item=>item.name).join(" + ")} للعميل ${input.clientName}.`,entity:"booking",entityId:bookingId});
+  await tx.insert(notifications).values({tenantId:tenant.id,recipientStaffId:input.staffId,type:"booking.created",title:"حجز أونلاين جديد",body:`تم حجز ${selectedServices.map(item=>item.name).join(" + ")} للعميل ${clientName}.`,entity:"booking",entityId:bookingId});
   return { id: bookingId, bookingId, tenantId: tenant.id, tenantName: tenant.name, serviceName: selectedServices.map(item=>item.name).join(" + "), totalDuration, totalPrice };
   });
 }
