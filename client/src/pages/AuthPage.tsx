@@ -21,7 +21,7 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
   const [error, setError] = useState("");
 
   const login = trpc.auth.login.useMutation({ onSuccess: () => navigate("/"), onError: e => setError(t(e.message)) });
-  const register = trpc.auth.register.useMutation({ onSuccess: () => navigate("/"), onError: e => setError(t(e.message)) });
+  const register = trpc.auth.register.useMutation({ onSuccess: () => navigate(isStaffInvite ? "/" : "/setup-company"), onError: e => setError(t(e.message)) });
   const forgot = trpc.auth.forgotPassword.useMutation({ onSuccess: r => setMessage(t(r.message)), onError: e => setError(t(e.message)) });
   const reset = trpc.auth.resetPassword.useMutation({ onSuccess: () => navigate("/login?reset=1"), onError: e => setError(t(e.message)) });
   const submit = (event: FormEvent) => {
