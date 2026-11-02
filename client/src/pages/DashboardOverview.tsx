@@ -45,9 +45,9 @@ export default function DashboardOverview({tenantId,timezone,currency,workspaceN
     return {day:weekdays[new Date(date+"T12:00:00Z").getUTCDay()],bookings:count};
   }),[rows,today]);
   const demandData = useMemo(()=>[9,12,15,18,21].map(hour=>({
-    time:hour===12?"12م":hour>12?`${hour-12}م`:`${hour}ص`,
+    time:new Intl.DateTimeFormat(language==="en"?"en-GB":language==="ru"?"ru-RU":"ar-OM",{hour:"numeric",hour12:true,timeZone:timezone}).format(new Date(`${today}T${String(hour).padStart(2,"0")}:00:00`)),
     count:rows.filter(row=>row.date===today&&Math.floor(row.startMinutes/60)>=hour&&Math.floor(row.startMinutes/60)<hour+3&&row.status!=="cancelled").length
-  })),[rows,today]);
+  })),[rows,today,language,timezone]);
   const peak = [...demandData].sort((a,b)=>b.count-a.count)[0];
   const nowMinutes = (()=>{const parts=new Intl.DateTimeFormat("en-GB",{timeZone:timezone,hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date()).split(":").map(Number);return parts[0]*60+parts[1];})();
   const upcoming = [...todayRows].filter(row=>row.startMinutes>=nowMinutes&&row.status!=="cancelled").sort((a,b)=>a.startMinutes-b.startMinutes).slice(0,5);
