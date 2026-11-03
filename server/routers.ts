@@ -19,7 +19,6 @@ export const appRouter = router({
   }),
   platform: router({
     tenants: adminProcedure.query(() => listTenants()),
-    setTenantStatus: adminProcedure.input(z.object({tenantId:z.number(),status:z.enum(["active","trial","suspended"])})).mutation(({ctx,input}) => setTenantStatus(input.tenantId,input.status,ctx.user.id)),
   }),
   publicBooking: router({
     catalog: publicBookingReadProcedure.input(z.object({ slug: z.string().min(2) })).query(({ input }) => getPublicBookingCatalog(input.slug)),
@@ -50,6 +49,7 @@ export const appRouter = router({
       catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر اقتراح المواعيد المناسبة"}); }
     }),
     createTenant: protectedProcedure.input(z.object({name:z.string().min(2).max(160), slug:z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).min(2).max(120), city:z.string().max(120).optional(), currency:z.string().max(12).optional()})).mutation(async ({ctx,input}) => {
+      if (ctx.user.role === "admin") throw new TRPCError({code:"FORBIDDEN",message:"إدارة المنصة للعرض فقط ولا يمكنها إنشاء شركات من هذا الحساب"});
       try { return await createTenantForUser(ctx.user.id, input); } catch (error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error ? error.message : "تعذر إنشاء مساحة الشركة"}); }
     }),
     updateSettings: protectedProcedure.input(z.object({tenantId:z.number(),countryCode:z.string().length(2).optional(),currency:z.string().max(12).optional(),timezone:z.string().max(64).optional(),defaultLanguage:z.enum(["ar","en","ru"]).optional()})).mutation(async ({ctx,input}) => { if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية الوصول إلى هذه الشركة"}); const {tenantId,...settings}=input; return updateTenantSettings(tenantId,settings); }),
