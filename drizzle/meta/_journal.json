@@ -99,6 +99,13 @@
       "when": 1793527200000,
       "tag": "0016_platform_admin_security",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1793708460000,
+      "tag": "0017_email_verification",
+      "breakpoints": true
     }
   ]
 }

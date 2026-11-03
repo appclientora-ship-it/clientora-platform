@@ -30,6 +30,11 @@ export async function bootstrapFirstSuperAdmin(userId: number) {
     if (state.claimedAt) throw new Error("The first Super Admin has already been initialized");
 
     const target = (await tx.select().from(users).where(eq(users.id, userId)).for("update").limit(1))[0];
+    const ownerEmail = process.env.PLATFORM_OWNER_EMAIL?.trim().toLowerCase();
+    if (!ownerEmail || !target?.email || target.email.trim().toLowerCase() !== ownerEmail) {
+      throw new Error("Bootstrap target email must match the configured PLATFORM_OWNER_EMAIL");
+    }
+    if (!target.emailVerifiedAt) throw new Error("Platform owner email must be verified before Super Admin bootstrap");
     if (!target || !target.passwordHash || !target.openId.startsWith("local:")) {
       throw new Error("Bootstrap target must be an existing local-password account selected by numeric user ID");
     }

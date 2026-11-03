@@ -4,7 +4,7 @@ import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-type Mode = "login" | "register" | "forgot" | "reset";
+type Mode = "login" | "register" | "forgot" | "reset" | "verify";
 
 export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
   const { language, setLanguage, t } = useLanguage();
@@ -17,25 +17,28 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
-  const [message, setMessage] = useState(() => query.get("reset") === "1" ? t("تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن.") : "");
+  const [message, setMessage] = useState(() => query.get("reset") === "1" ? t("تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن.") : query.get("verified") === "1" ? t("تم تأكيد بريدك الإلكتروني. يمكنك تسجيل الدخول الآن.") : "");
   const [error, setError] = useState("");
 
   const login = trpc.auth.login.useMutation({ onSuccess: () => navigate("/"), onError: e => setError(t(e.message)) });
-  const register = trpc.auth.register.useMutation({ onSuccess: () => navigate("/"), onError: e => setError(t(e.message)) });
+  const register = trpc.auth.register.useMutation({ onSuccess: r => { setMessage(t("تم إنشاء الحساب. أرسلنا رابط تأكيد إلى ") + r.email + t(". افتح الرسالة لتفعيل حسابك.")); setPassword(""); }, onError: e => setError(t(e.message)) });
   const forgot = trpc.auth.forgotPassword.useMutation({ onSuccess: r => setMessage(t(r.message)), onError: e => setError(t(e.message)) });
   const reset = trpc.auth.resetPassword.useMutation({ onSuccess: () => navigate("/login?reset=1"), onError: e => setError(t(e.message)) });
+  const verifyEmail = trpc.auth.verifyEmail.useMutation({ onSuccess: () => navigate("/login?verified=1"), onError: e => setError(t(e.message)) });
+  const resendVerification = trpc.auth.resendVerification.useMutation({ onSuccess: r => setMessage(t(r.message)), onError: e => setError(t(e.message)) });
   const submit = (event: FormEvent) => {
     event.preventDefault(); setError(""); setMessage("");
     if (mode === "register") register.mutate({ name, email, password, ...(accountType === "staff" ? { inviteCode } : {}) });
     else if (mode === "forgot") forgot.mutate({ email });
     else if (mode === "reset") reset.mutate({ token: query.get("token") || "", password });
+    else if (mode === "verify") verifyEmail.mutate({ token: query.get("token") || "" });
     else login.mutate({ email, password, remember });
   };
-  const title = t(mode === "register" ? "إنشاء حساب جديد" : mode === "forgot" ? "استعادة كلمة المرور" : mode === "reset" ? "تعيين كلمة مرور جديدة" : "مرحباً بعودتك!");
+  const title = t(mode === "register" ? "إنشاء حساب جديد" : mode === "forgot" ? "استعادة كلمة المرور" : mode === "reset" ? "تعيين كلمة مرور جديدة" : mode === "verify" ? "تأكيد البريد الإلكتروني" : "مرحباً بعودتك!");
   const description = mode === "login" ? t("سجل دخولك للوصول إلى حسابك وإدارة أعمالك.") :
     mode === "register" ? (accountType === "staff" ? t("أدخل كود الدعوة الذي أرسله لك صاحب الشركة للانضمام إلى فريقه.") : t("أنشئ حساب صاحب الشركة وابدأ إعداد مساحة عملك.")) :
-    mode === "forgot" ? t("سنرسل رابطاً آمناً إلى بريدك الإلكتروني.") : t("اكتب كلمة مرور جديدة لحسابك.");
-  const busy = login.isPending || register.isPending || forgot.isPending || reset.isPending;
+    mode === "forgot" ? t("سنرسل رابطاً آمناً إلى بريدك الإلكتروني.") : mode === "verify" ? t("اضغط على الزر لتأكيد بريدك الإلكتروني وتفعيل حسابك.") : t("اكتب كلمة مرور جديدة لحسابك.");
+  const busy = login.isPending || register.isPending || forgot.isPending || reset.isPending || verifyEmail.isPending || resendVerification.isPending;
 
   return <main className="clientora-auth" dir={language === "ar" ? "rtl" : "ltr"}>
     <section className="auth-visual">
@@ -68,17 +71,18 @@ export default function AuthPage({ mode = "login" }: { mode?: Mode }) {
             <label className="auth-field"><UserRound size={18}/><input required value={name} onChange={e=>setName(e.target.value)} placeholder={t("الاسم الكامل")}/></label>
             {accountType === "staff" && <label className="auth-field"><LockKeyhole size={18}/><input required value={inviteCode} onChange={e=>setInviteCode(e.target.value.trim())} placeholder={t("كود دعوة الشركة")} dir="ltr"/></label>}
           </>}
-          {mode !== "reset" && <label className="auth-field"><Mail size={18}/><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder={t("البريد الإلكتروني")} dir="ltr"/></label>}
-          {mode !== "forgot" && <label className="auth-field"><LockKeyhole size={18}/><input required minLength={8} type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder={t("كلمة المرور (8 أحرف على الأقل)")} dir="ltr"/><button className="auth-eye" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?t("إخفاء كلمة المرور"):t("إظهار كلمة المرور")}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></label>}
+          {mode !== "reset" && mode !== "verify" && <label className="auth-field"><Mail size={18}/><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder={t("البريد الإلكتروني")} dir="ltr"/></label>}
+          {mode !== "forgot" && mode !== "verify" && <label className="auth-field"><LockKeyhole size={18}/><input required minLength={8} type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder={t("كلمة المرور (8 أحرف على الأقل)")} dir="ltr"/><button className="auth-eye" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?t("إخفاء كلمة المرور"):t("إظهار كلمة المرور")}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></label>}
           {mode === "login" && <div className="auth-options"><label><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/>{t("تذكرني")}</label><button type="button" onClick={()=>navigate("/forgot-password")}>{t("نسيت كلمة المرور؟")}</button></div>}
           {error && <div className="auth-message error">{error}</div>}
+          {mode === "login" && email.includes("@") && <button type="button" className="auth-resend-verification" onClick={()=>resendVerification.mutate({email})} disabled={busy}>{t("إعادة إرسال رسالة تأكيد البريد")}</button>}
           {message && <div className="auth-message success"><CheckCircle2 size={17}/>{message}</div>}
-          <button className="auth-submit" disabled={busy}>{busy?t("جارٍ المعالجة..."):mode==="login"?t("تسجيل الدخول"):mode==="register"?t("إنشاء الحساب"):mode==="forgot"?t("إرسال رابط الاستعادة"):t("حفظ كلمة المرور")}<LogIn size={18}/></button>
+          <button className="auth-submit" disabled={busy}>{busy?t("جارٍ المعالجة..."):mode==="login"?t("تسجيل الدخول"):mode==="register"?t("إنشاء الحساب"):mode==="forgot"?t("إرسال رابط الاستعادة"):mode==="verify"?t("تأكيد البريد الإلكتروني"):t("حفظ كلمة المرور")}<LogIn size={18}/></button>
         </form>
         <div className="auth-links">
           {mode === "login" && <span>{t("ليس لديك حساب؟")} <button onClick={()=>navigate("/register")}>{t("إنشاء حساب جديد")}</button></span>}
           {mode === "register" && <span>{t("لديك حساب؟")} <button onClick={()=>navigate("/login")}>{t("تسجيل الدخول")}</button></span>}
-          {(mode === "forgot" || mode === "reset") && <button onClick={()=>navigate("/login")}><ArrowLeft size={15}/>{t("العودة للدخول")}</button>}
+          {(mode === "forgot" || mode === "reset" || mode === "verify") && <button onClick={()=>navigate("/login")}><ArrowLeft size={15}/>{t("العودة للدخول")}</button>}
         </div>
         <small className="auth-security"><ShieldCheck size={15}/>{t("بياناتك آمنة ومحمية بأعلى معايير الأمان")}</small>
       </section>

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import mysql from "mysql2/promise";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapFirstSuperAdmin, setPlatformAdminRole } from "./platformAdmin";
-import { registerLocalUser, loginLocalUser } from "./localAuth";
+import { registerLocalUser, loginLocalUser, createEmailVerificationToken, verifyEmailToken } from "./localAuth";
 import { upsertUser } from "./db";
 import { consumeSharedRateLimit } from "./_core/rateLimit";
 import { createContext } from "./_core/context";
@@ -55,6 +55,7 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     }
     delete process.env.SUPER_ADMIN_BOOTSTRAP_TOKEN;
     delete process.env.AUTH_SESSION_SECRET;
+    delete process.env.PLATFORM_OWNER_EMAIL;
   });
 
   async function newUser(label: string) {
@@ -65,13 +66,27 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
       password: "Integration-test-password-123",
     });
     createdUserIds.push(user.id);
-    return user;
+    await connection.execute("UPDATE users SET emailVerifiedAt = NOW(3) WHERE id = ?", [user.id]);
+    return { ...user, emailVerifiedAt: new Date() };
   }
+
+  it("verifies email with a hashed, expiring, single-use token before login", async () => {
+    const user = await registerLocalUser({ name: "Email Verify", email: `verify-${randomUUID()}@clientora.test`, password: "Integration-test-password-123" });
+    createdUserIds.push(user.id);
+    await expect(loginLocalUser(user.email!, "Integration-test-password-123")).rejects.toThrow("تأكيد بريدك الإلكتروني");
+    const token = await createEmailVerificationToken(user.id);
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>("SELECT tokenHash, expiresAt, usedAt FROM emailVerifications WHERE userId = ? ORDER BY id DESC LIMIT 1", [user.id]);
+    expect(rows[0]?.tokenHash).not.toBe(token);
+    await expect(verifyEmailToken(token)).resolves.toMatchObject({ success: true });
+    await expect(verifyEmailToken(token)).rejects.toThrow("غير صالح أو منتهي");
+    expect((await loginLocalUser(user.email!, "Integration-test-password-123")).id).toBe(user.id);
+  });
 
   it("keeps registration and login functional and rejects duplicate email registration", async () => {
     const email = `login-${randomUUID()}@clientora.test`;
     const user = await registerLocalUser({ name: "Login Test", email, password: "Integration-test-password-123" });
     createdUserIds.push(user.id);
+    await connection.execute("UPDATE users SET emailVerifiedAt = NOW(3) WHERE id = ?", [user.id]);
     expect((await loginLocalUser(email.toUpperCase(), "Integration-test-password-123")).id).toBe(user.id);
     await expect(registerLocalUser({ name: "Duplicate", email, password: "Another-password-123" })).rejects.toThrow("هذا البريد مسجل بالفعل");
   });
@@ -87,6 +102,7 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
 
   it("bootstraps one explicit local account once, audits it, and rejects reuse", async () => {
     const user = await newUser("Bootstrap Admin");
+    process.env.PLATFORM_OWNER_EMAIL = user.email!;
     await expect(bootstrapFirstSuperAdmin(user.id)).resolves.toMatchObject({ success: true, userId: user.id, role: "admin" });
     const [rows] = await connection.execute<mysql.RowDataPacket[]>("SELECT role FROM users WHERE id = ?", [user.id]);
     expect(rows[0]?.role).toBe("admin");
@@ -101,6 +117,7 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
   it("allows audited grants and revocations, blocks non-admin actors and protects the last admin", async () => {
     const first = await newUser("First Admin");
     const second = await newUser("Second Admin");
+    process.env.PLATFORM_OWNER_EMAIL = first.email!;
     await bootstrapFirstSuperAdmin(first.id);
     await expect(setPlatformAdminRole(first.id, second.id, true, { reason: "Test grant", ip: "127.0.0.1", userAgent: "Vitest" }))
       .resolves.toMatchObject({ changed: true, role: "admin" });
