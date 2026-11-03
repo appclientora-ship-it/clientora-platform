@@ -46,6 +46,8 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
           [...createdUserIds, ...createdUserIds],
         );
       }
+      for (const id of createdTenantIds) await connection.execute("DELETE FROM subscriptionEvents WHERE tenantId = ?", [id]);
+      for (const id of createdTenantIds) await connection.execute("DELETE FROM tenantSubscriptions WHERE tenantId = ?", [id]);
       for (const id of createdTenantIds) await connection.execute("DELETE FROM staffInvites WHERE tenantId = ?", [id]);
       for (const id of createdTenantIds) await connection.execute("DELETE FROM staff WHERE tenantId = ?", [id]);
       for (const id of createdTenantIds) await connection.execute("DELETE FROM tenantMembers WHERE tenantId = ?", [id]);
