@@ -98,7 +98,7 @@ export async function registerLocalUser(input: {email:string;password:string;nam
   }
   const result = await db.insert(users).values({
     openId: `local:${crypto.randomUUID()}`, email, name: input.name.trim(),
-    loginMethod: "password", passwordHash: hashedPassword,
+    loginMethod: "password", passwordHash: hashedPassword, emailVerificationRequired: 1,
   });
   return (await db.select().from(users).where(eq(users.id, Number(result[0].insertId))).limit(1))[0];
 }
