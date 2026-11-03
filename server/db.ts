@@ -181,9 +181,14 @@ export async function updateTenantSubscription(
 
     if (input.action === "select_plan") {
       if (!input.planKey) throw new Error("اختر باقة صحيحة");
-      const plan = (await tx.select({ id: subscriptionPlans.id }).from(subscriptionPlans)
+      const plan = (await tx.select({ id: subscriptionPlans.id, staffLimit: subscriptionPlans.staffLimit }).from(subscriptionPlans)
         .where(and(eq(subscriptionPlans.planKey, input.planKey), eq(subscriptionPlans.active, 1))).limit(1))[0];
       if (!plan) throw new Error("الباقة غير موجودة أو غير متاحة");
+      const [activeStaffCount] = await tx.select({ total: count() }).from(staff)
+        .where(and(eq(staff.tenantId, input.tenantId), eq(staff.active, 1)));
+      if (Number(activeStaffCount?.total ?? 0) > plan.staffLimit) {
+        throw new Error(`لا يمكن اختيار هذه الباقة؛ لدى الصالون ${activeStaffCount.total} موظفين نشطين والباقة تسمح بـ ${plan.staffLimit} فقط.`);
+      }
       if (subscription) {
         await tx.update(tenantSubscriptions).set({ planId: plan.id }).where(eq(tenantSubscriptions.id, subscription.id));
       } else {

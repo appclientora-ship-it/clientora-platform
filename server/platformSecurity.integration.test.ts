@@ -153,6 +153,12 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     await addStaff(tenantId, { name: "Plan Staff 2", role: "Barber" });
     await addStaff(tenantId, { name: "Plan Staff 3", role: "Barber" });
     await expect(addStaff(tenantId, { name: "Plan Staff 4", role: "Barber" })).rejects.toThrow("الحد الأقصى للموظفين");
+    await expect(updateTenantSubscription({ tenantId, action: "select_plan", planKey: "Solo" }, 1)).rejects.toThrow("لا يمكن اختيار هذه الباقة");
+    const [unchangedPlanRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT p.planKey FROM tenantSubscriptions s JOIN subscriptionPlans p ON p.id = s.planId WHERE s.tenantId = ?", [tenantId],
+    );
+    expect(unchangedPlanRows[0]?.planKey).toBe("S3");
+
     const [activeRows] = await connection.execute<mysql.RowDataPacket[]>(
       "SELECT status, currentPeriodStart, currentPeriodEnd, gracePeriodEndsAt, autoRenew FROM tenantSubscriptions WHERE tenantId = ?", [tenantId],
     );
