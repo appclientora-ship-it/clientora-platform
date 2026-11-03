@@ -77,8 +77,14 @@ export default function Home() {
   const displayDate = useMemo(() => { const date = new Date(today); date.setDate(date.getDate() + dateOffset); return date; }, [today,dateOffset]);
   const authQuery = trpc.auth.me.useQuery();
   const isPlatformAdmin = authQuery.data?.role === "admin";
-  const workspaceQuery = trpc.workspace.current.useQuery();
-  const accessContextQuery = trpc.workspace.accessContext.useQuery();
+  const [selectedTenantId,setSelectedTenantId] = useState<number | undefined>(() => {
+    if (typeof window === "undefined") return undefined;
+    const saved = Number(localStorage.getItem("clientora-selected-tenant"));
+    return Number.isInteger(saved) && saved > 0 ? saved : undefined;
+  });
+  const membershipsQuery = trpc.workspace.memberships.useQuery(undefined,{enabled:!isPlatformAdmin});
+  const workspaceQuery = trpc.workspace.current.useQuery({tenantId:selectedTenantId});
+  const accessContextQuery = trpc.workspace.accessContext.useQuery({tenantId:selectedTenantId});
   const isStaffAccount = accessContextQuery.data?.role === "staff";
   const tenantId = workspaceQuery.data?.id;
   const selectedIsoDate = isoDate(displayDate,workspaceQuery.data?.timezone ?? "Asia/Muscat");
@@ -119,7 +125,8 @@ export default function Home() {
   return <div className={`app-shell ${compact ? "compact" : ""}`} style={{"--brand":accent} as React.CSSProperties}>
     <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
       <div className="brand-lockup"><div className="brand-mark"><Sparkles size={21}/></div><div><strong>Clientora</strong><span>{t("منصة إدارة الحجوزات")}</span></div></div>
-      <div className="workspace-switcher" onClick={() => {if(isPlatformAdmin) setModal("company")}}><div className="workspace-avatar">{(workspaceQuery.data?.name ?? "C").slice(0,1).toUpperCase()}</div><div><b>{workspaceQuery.data?.name ?? t("مساحة العمل")}</b><small>{[workspaceQuery.data?.city,workspaceQuery.data?.countryCode].filter(Boolean).join(" · ") || t("بيانات الموقع غير متاحة")}</small></div>{isPlatformAdmin && <ChevronDown size={16}/>}</div>
+      <div className="workspace-switcher" onClick={() => {if(isPlatformAdmin) setModal("company")}}><div className="workspace-avatar">{(workspaceQuery.data?.name ?? "C").slice(0,1).toUpperCase()}</div><div><b>{workspaceQuery.data?.name ?? t("مساحة العمل")}</b><small>{[workspaceQuery.data?.city,workspaceQuery.data?.countryCode].filter(Boolean).join(" · ") || t("بيانات الموقع غير متاحة")}</small></div></div>
+      {!isPlatformAdmin && (membershipsQuery.data?.length ?? 0) > 1 && <div className="workspace-select-wrap"><label htmlFor="clientora-workspace-select">{t("اختيار الشركة")}</label><select id="clientora-workspace-select" value={selectedTenantId ?? ""} onChange={event=>{const next=Number(event.target.value);if(Number.isInteger(next)&&next>0){localStorage.setItem("clientora-selected-tenant",String(next));setSelectedTenantId(next);}}}><option value="">{t("اختر الشركة")}</option>{membershipsQuery.data?.map(item=><option key={item.id} value={item.id}>{item.name}{item.city ? " · "+item.city : ""}</option>)}</select></div>}
       <div className="nav-title">{t("مساحة العمل")}</div>
       <nav>{(isStaffAccount ? navItems.filter(item=>item.id==="dashboard") : navItems).map(item => { const Icon = item.icon; return <button key={item.id} className={`nav-item ${active === item.id ? "active" : ""}`} onClick={() => {setActive(item.id);setSidebarOpen(false)}}><Icon size={19}/><span>{navTranslation[item.id]?.[language] ?? item.label}</span><span className="nav-actions"><Pencil size={12} onClick={e => {e.stopPropagation(); setModal("customize")}}/></span></button> })}</nav>
       <div className="sidebar-spacer" />
