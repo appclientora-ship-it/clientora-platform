@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS `subscriptionPlans` (
 );
 --> statement-breakpoint
 INSERT INTO `subscriptionPlans` (`planKey`, `staffLimit`, `monthlyPriceCents`, `currency`) VALUES
-  ('Solo', 1, 700, 'USD'),
+  ('Solo', 1, 500, 'USD'),
   ('S3', 3, 1300, 'USD'),
   ('S7', 7, 1500, 'USD'),
   ('S9', 9, 1900, 'USD'),
