@@ -101,6 +101,16 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     delete process.env.OWNER_OPEN_ID;
   });
 
+  it("does not treat a legacy account as email-verified for owner bootstrap", async () => {
+    const user = await newUser("Legacy Owner");
+    process.env.PLATFORM_OWNER_EMAIL = user.email!;
+    await connection.execute("UPDATE users SET emailVerifiedAt = NULL, emailVerificationRequired = 0 WHERE id = ?", [user.id]);
+    await expect(bootstrapFirstSuperAdmin(user.id)).rejects.toThrow("email must be verified");
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>("SELECT role FROM users WHERE id = ?", [user.id]);
+    expect(rows[0]?.role).toBe("user");
+    await expect(loginLocalUser(user.email!, "Integration-test-password-123")).resolves.toMatchObject({ id: user.id });
+  });
+
   it("bootstraps one explicit local account once, audits it, and rejects reuse", async () => {
     const user = await newUser("Bootstrap Admin");
     process.env.PLATFORM_OWNER_EMAIL = user.email!;

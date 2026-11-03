@@ -1,6 +1,6 @@
 ALTER TABLE `users` ADD COLUMN `emailVerifiedAt` timestamp NULL DEFAULT NULL;
 --> statement-breakpoint
-UPDATE `users` SET `emailVerifiedAt` = `createdAt` WHERE `emailVerifiedAt` IS NULL;
+ALTER TABLE `users` ADD COLUMN `emailVerificationRequired` int NOT NULL DEFAULT 0;
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS `emailVerifications` (
   `id` int NOT NULL AUTO_INCREMENT,
