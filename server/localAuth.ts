@@ -128,12 +128,18 @@ export async function sendEmailVerification(userId: number, email: string): Prom
   const token = await createEmailVerificationToken(userId);
   const appUrl = (process.env.APP_URL || "https://clientora.app").replace(/\/$/, "");
   const transporter = nodemailer.createTransport({ host, port, secure: port === 465, auth: { user, pass } });
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || user,
-    to: email,
-    subject: "تأكيد بريدك الإلكتروني - Clientora",
-    text: `مرحبًا بك في Clientora. لتأكيد بريدك الإلكتروني افتح الرابط التالي خلال 30 دقيقة:\n\n${appUrl}/verify-email?token=${token}\n\nإذا لم تنشئ هذا الحساب فتجاهل الرسالة.`,
-  });
+  try {
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || user,
+      to: email,
+      subject: "تأكيد بريدك الإلكتروني - Clientora",
+      text: `مرحبًا بك في Clientora. لتأكيد بريدك الإلكتروني افتح الرابط التالي خلال 30 دقيقة:\n\n${appUrl}/verify-email?token=${token}\n\nإذا لم تنشئ هذا الحساب فتجاهل الرسالة.`,
+    });
+  } catch (error) {
+    const db = await getDb();
+    if (db) await db.update(emailVerifications).set({ usedAt: new Date() }).where(eq(emailVerifications.tokenHash, hash(token)));
+    throw error;
+  }
 }
 
 export async function verifyEmailToken(token: string): Promise<{ success: true }> {

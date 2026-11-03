@@ -83,6 +83,24 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     expect((await loginLocalUser(user.email!, "Integration-test-password-123")).id).toBe(user.id);
   });
 
+  it("rejects an expired email verification token", async () => {
+    const user = await registerLocalUser({ name: "Expired Verify", email: `expired-${randomUUID()}@clientora.test`, password: "Integration-test-password-123" });
+    createdUserIds.push(user.id);
+    const token = await createEmailVerificationToken(user.id);
+    await connection.execute("UPDATE emailVerifications SET expiresAt = DATE_SUB(NOW(3), INTERVAL 1 MINUTE) WHERE userId = ?", [user.id]);
+    await expect(verifyEmailToken(token)).rejects.toThrow("غير صالح أو منتهي");
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>("SELECT emailVerifiedAt FROM users WHERE id = ?", [user.id]);
+    expect(rows[0]?.emailVerifiedAt).toBeNull();
+  });
+
+  it("rejects Super Admin bootstrap when the configured owner email does not match", async () => {
+    const user = await newUser("Wrong Owner Email");
+    process.env.PLATFORM_OWNER_EMAIL = "different-owner@clientora.test";
+    await expect(bootstrapFirstSuperAdmin(user.id)).rejects.toThrow("PLATFORM_OWNER_EMAIL");
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>("SELECT role FROM users WHERE id = ?", [user.id]);
+    expect(rows[0]?.role).toBe("user");
+  });
+
   it("keeps registration and login functional and rejects duplicate email registration", async () => {
     const email = `login-${randomUUID()}@clientora.test`;
     const user = await registerLocalUser({ name: "Login Test", email, password: "Integration-test-password-123" });

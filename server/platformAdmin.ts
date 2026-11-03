@@ -15,7 +15,7 @@ function requireBootstrapSecret(): void {
 /**
  * Run only from the trusted server CLI. This is intentionally not an HTTP route.
  * Possession of the server-only bootstrap secret and an explicit local account ID
- * are both required; email addresses are never used to identify or promote an admin.
+ * are both required. The configured owner email and a verified mailbox must also match.
  */
 export async function bootstrapFirstSuperAdmin(userId: number) {
   requireBootstrapSecret();
