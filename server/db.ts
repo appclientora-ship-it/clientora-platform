@@ -13,7 +13,9 @@ export async function getDb() {
   return _db;
 }
 
-export async function upsertUser(user: InsertUser): Promise<void> {
+// Role is deliberately excluded from caller input. Only the trusted OWNER_OPEN_ID
+// bootstrap may receive platform-admin privileges; profile upserts cannot promote users.
+export async function upsertUser(user: Omit<InsertUser, "role">): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   const values: InsertUser = { openId: user.openId };
@@ -22,8 +24,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     if (user[field] !== undefined) { values[field] = user[field] ?? null; updateSet[field] = user[field] ?? null; }
   });
   if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
-  if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
-  else if (user.openId === ENV.ownerOpenId) { values.role = 'admin'; updateSet.role = 'admin'; }
+  if (ENV.ownerOpenId && user.openId === ENV.ownerOpenId) {
+    values.role = 'admin';
+    updateSet.role = 'admin';
+  }
   values.lastSignedIn ??= new Date();
   if (!Object.keys(updateSet).length) updateSet.lastSignedIn = new Date();
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
