@@ -3,7 +3,7 @@ import mysql from "mysql2/promise";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapFirstSuperAdmin, setPlatformAdminRole } from "./platformAdmin";
 import { registerLocalUser, loginLocalUser, createEmailVerificationToken, verifyEmailToken, resendEmailVerification } from "./localAuth";
-import { addStaff, createTenantForUser, upsertUser, listSubscriptionPlans, updateTenantSubscription } from "./db";
+import { addStaff, createTenantForUser, upsertUser, listSubscriptionPlans, updateTenantSubscription, runSubscriptionMaintenance } from "./db";
 import { consumeSharedRateLimit } from "./_core/rateLimit";
 import { createContext } from "./_core/context";
 import { sessionForUser } from "./localAuth";
@@ -184,6 +184,42 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
       "subscription.select_plan", "subscription.activate", "subscription.set_auto_renew",
       "subscription.renew", "subscription.suspend",
     ]);
+  });
+
+  it("moves expired subscriptions through the 21-day grace period and then suspends access", async () => {
+    const slug = `grace-test-${randomUUID().slice(0, 8)}`;
+    const [tenantResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO tenants (name, slug, status, currency) VALUES (?, ?, 'trial', 'OMR')",
+      ["Grace Period Test", slug],
+    );
+    const tenantId = Number(tenantResult.insertId);
+    createdTenantIds.push(tenantId);
+    await updateTenantSubscription({ tenantId, action: "select_plan", planKey: "Solo" }, 1);
+    await updateTenantSubscription({ tenantId, action: "activate" }, 1);
+    await connection.execute(
+      "UPDATE tenantSubscriptions SET currentPeriodEnd = DATE_SUB(NOW(3), INTERVAL 20 DAY), gracePeriodEndsAt = NULL WHERE tenantId = ?",
+      [tenantId],
+    );
+
+    await expect(runSubscriptionMaintenance()).resolves.toMatchObject({ graceStarted: 1, suspended: 0 });
+    const [graceRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT t.status AS tenantStatus, s.status AS subscriptionStatus, s.gracePeriodEndsAt FROM tenants t JOIN tenantSubscriptions s ON s.tenantId = t.id WHERE t.id = ?",
+      [tenantId],
+    );
+    expect(graceRows[0]?.tenantStatus).toBe("active");
+    expect(graceRows[0]?.subscriptionStatus).toBe("past_due");
+    expect(new Date(graceRows[0].gracePeriodEndsAt).getTime()).toBeGreaterThan(Date.now());
+
+    await connection.execute(
+      "UPDATE tenantSubscriptions SET gracePeriodEndsAt = DATE_SUB(NOW(3), INTERVAL 1 DAY) WHERE tenantId = ?",
+      [tenantId],
+    );
+    await expect(runSubscriptionMaintenance()).resolves.toMatchObject({ suspended: 1 });
+    const [suspendedRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT t.status AS tenantStatus, s.status AS subscriptionStatus FROM tenants t JOIN tenantSubscriptions s ON s.tenantId = t.id WHERE t.id = ?",
+      [tenantId],
+    );
+    expect(suspendedRows[0]).toMatchObject({ tenantStatus: "suspended", subscriptionStatus: "suspended" });
   });
 
   it("rejects staff invitation redemption when the tenant is suspended", async () => {

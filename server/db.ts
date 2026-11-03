@@ -94,6 +94,57 @@ export async function getUserByOpenId(openId: string) {
   return result[0];
 }
 
+
+export async function runSubscriptionMaintenance(now = new Date()) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  return db.transaction(async (tx) => {
+    let graceStarted = 0;
+    let suspended = 0;
+    const expired = await tx.select().from(tenantSubscriptions)
+      .where(and(eq(tenantSubscriptions.status, "active"), lte(tenantSubscriptions.currentPeriodEnd, now)))
+      .for("update");
+    for (const subscription of expired) {
+      if (!subscription.currentPeriodEnd) continue;
+      const graceEnd = new Date(subscription.currentPeriodEnd.getTime() + subscription.graceDays * 86400000);
+      const graceExpired = graceEnd.getTime() <= now.getTime();
+      await tx.update(tenantSubscriptions).set({
+        status: graceExpired ? "suspended" : "past_due",
+        gracePeriodEndsAt: graceEnd,
+      }).where(eq(tenantSubscriptions.id, subscription.id));
+      if (graceExpired) {
+        await tx.update(tenants).set({ status: "suspended" }).where(eq(tenants.id, subscription.tenantId));
+        suspended++;
+      } else {
+        graceStarted++;
+      }
+      await tx.insert(subscriptionEvents).values({
+        tenantId: subscription.tenantId,
+        actorUserId: null,
+        action: graceExpired ? "subscription.grace_expired" : "subscription.grace_started",
+        details: JSON.stringify({ periodEnd: subscription.currentPeriodEnd, gracePeriodEndsAt: graceEnd, graceDays: subscription.graceDays }),
+      });
+    }
+
+    const graceExpiredRows = await tx.select().from(tenantSubscriptions)
+      .where(and(eq(tenantSubscriptions.status, "past_due"), lte(tenantSubscriptions.gracePeriodEndsAt, now)))
+      .for("update");
+    for (const subscription of graceExpiredRows) {
+      await tx.update(tenantSubscriptions).set({ status: "suspended" })
+        .where(eq(tenantSubscriptions.id, subscription.id));
+      await tx.update(tenants).set({ status: "suspended" }).where(eq(tenants.id, subscription.tenantId));
+      await tx.insert(subscriptionEvents).values({
+        tenantId: subscription.tenantId,
+        actorUserId: null,
+        action: "subscription.grace_expired",
+        details: JSON.stringify({ gracePeriodEndsAt: subscription.gracePeriodEndsAt }),
+      });
+      suspended++;
+    }
+    return { graceStarted, suspended };
+  });
+}
+
 export async function listSubscriptionPlans() {
   const db = await getDb();
   if (!db) return [];
