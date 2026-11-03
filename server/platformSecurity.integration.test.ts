@@ -242,6 +242,17 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
       [tenantId],
     );
     expect(suspendedRows[0]).toMatchObject({ tenantStatus: "suspended", subscriptionStatus: "suspended" });
+
+    const [eventsBeforeRetry] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT COUNT(*) AS total FROM subscriptionEvents WHERE tenantId = ? AND action IN ('subscription.grace_started', 'subscription.grace_expired')",
+      [tenantId],
+    );
+    await expect(runSubscriptionMaintenance()).resolves.toMatchObject({ graceStarted: 0, suspended: 0 });
+    const [eventsAfterRetry] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT COUNT(*) AS total FROM subscriptionEvents WHERE tenantId = ? AND action IN ('subscription.grace_started', 'subscription.grace_expired')",
+      [tenantId],
+    );
+    expect(Number(eventsAfterRetry[0]?.total)).toBe(Number(eventsBeforeRetry[0]?.total));
   });
 
   it("rejects staff invitation redemption when the tenant is suspended", async () => {
