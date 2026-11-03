@@ -17,6 +17,42 @@ export const tenants = mysqlTable("tenants", {
   id: int("id").autoincrement().primaryKey(), name: varchar("name", { length: 160 }).notNull(), slug: varchar("slug", { length: 120 }).notNull().unique(),
   status: mysqlEnum("status", ["active", "trial", "suspended"]).default("trial").notNull(), city: varchar("city", { length: 120 }), countryCode: varchar("countryCode", { length: 2 }).default("OM"), currency: varchar("currency", { length: 12 }).default("ر.ع").notNull(), timezone: varchar("timezone", { length: 64 }).default("Asia/Muscat"), defaultLanguage: varchar("defaultLanguage", { length: 10 }).default("ar"), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+export const subscriptionPlans = mysqlTable("subscriptionPlans", {
+  id: int("id").autoincrement().primaryKey(),
+  planKey: varchar("planKey", { length: 16 }).notNull().unique(),
+  staffLimit: int("staffLimit").notNull(),
+  monthlyPriceCents: int("monthlyPriceCents").notNull(),
+  currency: varchar("currency", { length: 3 }).default("USD").notNull(),
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const tenantSubscriptions = mysqlTable("tenantSubscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  planId: int("planId"),
+  status: mysqlEnum("status", ["active", "past_due", "suspended", "cancelled"]).default("active").notNull(),
+  currentPeriodStart: timestamp("currentPeriodStart"),
+  currentPeriodEnd: timestamp("currentPeriodEnd"),
+  gracePeriodEndsAt: timestamp("gracePeriodEndsAt"),
+  graceDays: int("graceDays").default(21).notNull(),
+  autoRenew: int("autoRenew").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  tenantUnique: uniqueIndex("tenantSubscriptions_tenant_unique").on(table.tenantId),
+}));
+
+export const subscriptionEvents = mysqlTable("subscriptionEvents", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  actorUserId: int("actorUserId"),
+  action: varchar("action", { length: 64 }).notNull(),
+  details: text("details"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export const tenantMembers = mysqlTable("tenantMembers", {
   id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), userId: int("userId").notNull(), role: mysqlEnum("role", ["owner", "manager", "staff"]).default("staff").notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
