@@ -120,6 +120,13 @@
       "when": 1793710500000,
       "tag": "0019_subscription_pending_state",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1793710800000,
+      "tag": "0020_correct_solo_plan_price",
+      "breakpoints": true
     }
   ]
 }
