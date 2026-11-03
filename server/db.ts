@@ -381,24 +381,24 @@ export async function listExpenses(tenantId:number,fromDate:string,toDate:string
 export async function createExpense(tenantId:number,createdBy:number,input:{category:string;description:string;vendor?:string;amount:number;date:string;paymentMethod:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(expenses).values({...input,tenantId,createdBy,vendor:input.vendor || null}); const id=Number(result[0].insertId); await db.insert(auditLogs).values({tenantId,actorUserId:createdBy,action:"expense.created",entity:"expense",entityId:id}); return (await db.select().from(expenses).where(eq(expenses.id,id)).limit(1))[0]; }
 export async function getTenantForUser(user: User) {
   const db = await getDb(); if (!db) return undefined;
-  const rows = await db.select({ tenant: tenants }).from(tenantMembers).innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id)).where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(1);
-  if (rows[0]?.tenant) return rows[0].tenant;
-  if (user.role === "admin") return (await db.select().from(tenants).orderBy(desc(tenants.createdAt)).limit(1))[0];
-  return undefined;
+  // Never infer a workspace for platform admins or silently choose one when
+  // a user belongs to multiple tenants. A workspace must be unambiguous.
+  const rows = await db.select({ tenant: tenants }).from(tenantMembers)
+    .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
+    .where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(2);
+  return rows.length === 1 ? rows[0].tenant : undefined;
 }
 export async function getTenantAccessContext(user: User) {
   const db = await getDb(); if (!db) return undefined;
-  if (user.role === "admin") {
-    const tenant = await getTenantForUser(user);
-    return tenant ? { tenantId: tenant.id, role: "owner" as const, staffId: null } : undefined;
-  }
+  // Platform administration is handled by platform-only procedures. Tenant
+  // access always requires an explicit membership in exactly one workspace.
   const rows = await db.select({ tenant: tenants, role: tenantMembers.role, staffId: staff.id })
     .from(tenantMembers)
     .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
     .leftJoin(staff, and(eq(staff.tenantId, tenantMembers.tenantId), eq(staff.userId, user.id), eq(staff.active, 1)))
-    .where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(1);
+    .where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(2);
+  if (rows.length !== 1) return undefined;
   const row = rows[0];
-  if (!row) return undefined;
   return { tenantId: row.tenant.id, role: row.role, staffId: row.staffId ?? null };
 }
 export async function listEmployeeBookings(tenantId:number, staffId:number, date:string, endDate?:string) {
@@ -414,7 +414,6 @@ export async function listEmployeeBookings(tenantId:number, staffId:number, date
     clientName:row.client.name,serviceName:row.service.name}));
 }
 export async function userCanAccessTenant(user: User, tenantId: number) {
-  if (user.role === "admin") return true;
   const db = await getDb(); if (!db) return false;
   const rows = await db.select({ id: tenantMembers.id }).from(tenantMembers)
     .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
@@ -422,7 +421,6 @@ export async function userCanAccessTenant(user: User, tenantId: number) {
   return rows.length > 0;
 }
 export async function userCanManageTenant(user: User, tenantId: number) {
-  if (user.role === "admin") return true;
   const db = await getDb(); if (!db) return false;
   const rows = await db.select({ role: tenantMembers.role }).from(tenantMembers)
     .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
