@@ -3,7 +3,7 @@ import mysql from "mysql2/promise";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapFirstSuperAdmin, setPlatformAdminRole } from "./platformAdmin";
 import { registerLocalUser, loginLocalUser, createEmailVerificationToken, verifyEmailToken, resendEmailVerification } from "./localAuth";
-import { createTenantForUser, upsertUser, listSubscriptionPlans, updateTenantSubscription } from "./db";
+import { addStaff, createTenantForUser, upsertUser, listSubscriptionPlans, updateTenantSubscription } from "./db";
 import { consumeSharedRateLimit } from "./_core/rateLimit";
 import { createContext } from "./_core/context";
 import { sessionForUser } from "./localAuth";
@@ -149,6 +149,10 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     expect(Number(pendingRows[0].planId)).toBeGreaterThan(0);
 
     await updateTenantSubscription({ tenantId, action: "activate" }, 1);
+    await addStaff(tenantId, { name: "Plan Staff 1", role: "Barber" });
+    await addStaff(tenantId, { name: "Plan Staff 2", role: "Barber" });
+    await addStaff(tenantId, { name: "Plan Staff 3", role: "Barber" });
+    await expect(addStaff(tenantId, { name: "Plan Staff 4", role: "Barber" })).rejects.toThrow("الحد الأقصى للموظفين");
     const [activeRows] = await connection.execute<mysql.RowDataPacket[]>(
       "SELECT status, currentPeriodStart, currentPeriodEnd, gracePeriodEndsAt, autoRenew FROM tenantSubscriptions WHERE tenantId = ?", [tenantId],
     );
