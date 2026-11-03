@@ -25,6 +25,7 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
 
   beforeAll(async () => {
     process.env.SUPER_ADMIN_BOOTSTRAP_TOKEN = secret;
+    process.env.AUTH_SESSION_SECRET = "test-only-auth-session-secret-at-least-32-characters";
     connection = await mysql.createConnection(databaseUrl!);
   });
 
@@ -53,6 +54,7 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
       await connection.end();
     }
     delete process.env.SUPER_ADMIN_BOOTSTRAP_TOKEN;
+    delete process.env.AUTH_SESSION_SECRET;
   });
 
   async function newUser(label: string) {
