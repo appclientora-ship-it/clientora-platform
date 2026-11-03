@@ -94,12 +94,18 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result[0];
 }
-export async function listTenants() { const db = await getDb(); return db ? db.select().from(tenants).orderBy(desc(tenants.createdAt)) : []; }
+export async function listTenants() { const db = await getDb(); return db ? db.select({ id: tenants.id, name: tenants.name, slug: tenants.slug, city: tenants.city, currency: tenants.currency, status: tenants.status, createdAt: tenants.createdAt }).from(tenants).orderBy(desc(tenants.createdAt)) : []; }
 export async function setTenantStatus(tenantId:number,status:"active"|"trial"|"suspended",actorUserId:number) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(tenants).set({status}).where(eq(tenants.id,tenantId)); await db.insert(auditLogs).values({tenantId,actorUserId,action:`tenant.${status}`,entity:"tenant",entityId:tenantId}); return (await db.select().from(tenants).where(eq(tenants.id,tenantId)).limit(1))[0]; }
 export async function createTenantForUser(userId: number, input: {name:string; slug:string; city?:string; currency?:string}) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   try {
     return await db.transaction(async tx => {
+      // Serialize workspace creation per account, then allow only the first owner workspace.
+      const account = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update").limit(1);
+      if (!account[0]) throw new Error("الحساب غير موجود");
+      const ownedWorkspace = await tx.select({ id: tenantMembers.id }).from(tenantMembers)
+        .where(and(eq(tenantMembers.userId, userId), eq(tenantMembers.role, "owner"))).limit(1);
+      if (ownedWorkspace[0]) throw new Error("هذا الحساب لديه شركة بالفعل");
       const existing = await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
       if (existing[0]) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
       const tenantResult = await tx.insert(tenants).values({name:input.name.trim(), slug:input.slug, city:input.city?.trim() || null, currency:input.currency ?? "ر.ع", status:"trial"});
