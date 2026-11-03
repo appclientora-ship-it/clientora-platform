@@ -155,7 +155,9 @@ export default function Home() {
   const removeNav = (id:string) => { setNavItems(items => items.filter(item => item.id !== id)); notify(t("تم إخفاء القسم من القائمة")); };
   const resetNav = () => { setNavItems(navDefaults); notify(t("تمت استعادة جميع الأقسام")); };
 
-  if (workspaceQuery.isSuccess && !workspaceQuery.data) return <FirstWorkspaceSetup />;\n\n  return <div className={`app-shell ${compact ? "compact" : ""}`} style={{"--brand":accent} as React.CSSProperties}>
+  if (workspaceQuery.isSuccess && !workspaceQuery.data) return <FirstWorkspaceSetup />;
+
+  return <div className={`app-shell ${compact ? "compact" : ""}`} style={{"--brand":accent} as React.CSSProperties}>
     <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
       <div className="brand-lockup"><div className="brand-mark"><Sparkles size={21}/></div><div><strong>Clientora</strong><span>{t("منصة إدارة الحجوزات")}</span></div></div>
       <div className="workspace-switcher" onClick={() => {if(isPlatformAdmin) setModal("company")}}><div className="workspace-avatar">{(workspaceQuery.data?.name ?? "C").slice(0,1).toUpperCase()}</div><div><b>{workspaceQuery.data?.name ?? t("مساحة العمل")}</b><small>{[workspaceQuery.data?.city,workspaceQuery.data?.countryCode].filter(Boolean).join(" · ") || t("بيانات الموقع غير متاحة")}</small></div>{isPlatformAdmin && <ChevronDown size={16}/>}</div>
