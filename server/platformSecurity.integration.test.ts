@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import mysql from "mysql2/promise";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapFirstSuperAdmin, setPlatformAdminRole } from "./platformAdmin";
-import { registerLocalUser, loginLocalUser, createEmailVerificationToken, verifyEmailToken } from "./localAuth";
+import { registerLocalUser, loginLocalUser, createEmailVerificationToken, verifyEmailToken, resendEmailVerification } from "./localAuth";
 import { upsertUser } from "./db";
 import { consumeSharedRateLimit } from "./_core/rateLimit";
 import { createContext } from "./_core/context";
@@ -83,6 +83,15 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     expect((await loginLocalUser(user.email!, "Integration-test-password-123")).id).toBe(user.id);
   });
 
+  it("limits verification resends to three requests per normalized inbox per hour", async () => {
+    const email = "resend-" + randomUUID() + "@clientora.test";
+    const key = "auth.email-verification-resend:" + email;
+    rateKeys.push(key);
+    await expect(resendEmailVerification(email)).resolves.toMatchObject({ message: expect.any(String) });
+    await expect(resendEmailVerification(email)).resolves.toMatchObject({ message: expect.any(String) });
+    await expect(resendEmailVerification(email)).resolves.toMatchObject({ message: expect.any(String) });
+    await expect(resendEmailVerification(email)).rejects.toThrow("رسائل تفعيل كثيرة");
+  });
   it("rejects an expired email verification token", async () => {
     const user = await registerLocalUser({ name: "Expired Verify", email: `expired-${randomUUID()}@clientora.test`, password: "Integration-test-password-123" });
     createdUserIds.push(user.id);
