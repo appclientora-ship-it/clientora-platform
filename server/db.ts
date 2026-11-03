@@ -385,25 +385,31 @@ export async function getEmployeeReports(tenantId:number,fromDate:string,toDate:
 }
 export async function listExpenses(tenantId:number,fromDate:string,toDate:string) { const db=await getDb(); return db ? db.select().from(expenses).where(and(eq(expenses.tenantId,tenantId),gte(expenses.date,fromDate),lte(expenses.date,toDate))).orderBy(desc(expenses.date),desc(expenses.id)) : []; }
 export async function createExpense(tenantId:number,createdBy:number,input:{category:string;description:string;vendor?:string;amount:number;date:string;paymentMethod:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(expenses).values({...input,tenantId,createdBy,vendor:input.vendor || null}); const id=Number(result[0].insertId); await db.insert(auditLogs).values({tenantId,actorUserId:createdBy,action:"expense.created",entity:"expense",entityId:id}); return (await db.select().from(expenses).where(and(eq(expenses.id,id),eq(expenses.tenantId,tenantId))).limit(1))[0]; }
-export async function getTenantForUser(user: User) {
+export async function listUserTenantMemberships(user: User) {
+  const db = await getDb(); if (!db || user.role === "admin") return [];
+  return db.select({ id: tenants.id, name: tenants.name, slug: tenants.slug, city: tenants.city, countryCode: tenants.countryCode, status: tenants.status, role: tenantMembers.role })
+    .from(tenantMembers).innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
+    .where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended")));
+}
+export async function getTenantForUser(user: User, selectedTenantId?: number) {
   const db = await getDb(); if (!db || user.role === "admin") return undefined;
-  // Platform admins use platform-only procedures. For other users, never
-  // silently choose a workspace when multiple active memberships exist.
+  const conditions = [eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended")];
+  if (selectedTenantId !== undefined) conditions.push(eq(tenantMembers.tenantId, selectedTenantId));
   const rows = await db.select({ tenant: tenants }).from(tenantMembers)
     .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
-    .where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(2);
-  return rows.length === 1 ? rows[0].tenant : undefined;
+    .where(and(...conditions)).limit(selectedTenantId === undefined ? 2 : 1);
+  return selectedTenantId !== undefined ? rows[0]?.tenant : rows.length === 1 ? rows[0].tenant : undefined;
 }
-export async function getTenantAccessContext(user: User) {
-  const db = await getDb(); if (!db) return undefined;
-  // Platform administration is handled by platform-only procedures. Tenant
-  // access always requires an explicit membership in exactly one workspace.
+export async function getTenantAccessContext(user: User, selectedTenantId?: number) {
+  const db = await getDb(); if (!db || user.role === "admin") return undefined;
+  const conditions = [eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended")];
+  if (selectedTenantId !== undefined) conditions.push(eq(tenantMembers.tenantId, selectedTenantId));
   const rows = await db.select({ tenant: tenants, role: tenantMembers.role, staffId: staff.id })
     .from(tenantMembers)
     .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
     .leftJoin(staff, and(eq(staff.tenantId, tenantMembers.tenantId), eq(staff.userId, user.id), eq(staff.active, 1)))
-    .where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(2);
-  if (rows.length !== 1) return undefined;
+    .where(and(...conditions)).limit(selectedTenantId === undefined ? 2 : 1);
+  if (selectedTenantId !== undefined ? rows.length !== 1 : rows.length !== 1) return undefined;
   const row = rows[0];
   return { tenantId: row.tenant.id, role: row.role, staffId: row.staffId ?? null };
 }
