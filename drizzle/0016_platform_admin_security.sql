@@ -4,9 +4,9 @@ CREATE TABLE IF NOT EXISTS `platformAdminBootstrap` (
   `claimedByUserId` int NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
 );
-
+--> statement-breakpoint
 INSERT IGNORE INTO `platformAdminBootstrap` (`id`, `claimedAt`, `claimedByUserId`) VALUES (1, NULL, NULL);
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS `platformAdminAuditLogs` (
   `id` int NOT NULL AUTO_INCREMENT,
   `actorUserId` int NULL,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS `platformAdminAuditLogs` (
   KEY `platformAdminAuditLogs_target_created_idx` (`targetUserId`, `createdAt`),
   KEY `platformAdminAuditLogs_actor_created_idx` (`actorUserId`, `createdAt`)
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS `rateLimitBuckets` (
   `bucketKey` varchar(64) NOT NULL,
   `count` int unsigned NOT NULL,
