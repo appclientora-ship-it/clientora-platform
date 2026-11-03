@@ -105,8 +105,8 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     await expect(setPlatformAdminRole(first.id, second.id, false)).rejects.toThrow("Only an active Super Admin");
     await expect(setPlatformAdminRole(second.id, second.id, false)).rejects.toThrow("last remaining Super Admin");
     const [logs] = await connection.execute<mysql.RowDataPacket[]>(
-      "SELECT action, actorUserId, targetUserId, reason, actorIp, actorUserAgent FROM platformAdminAuditLogs WHERE targetUserId = ? ORDER BY id",
-      [second.id],
+      "SELECT action, actorUserId, targetUserId, reason, actorIp, actorUserAgent FROM platformAdminAuditLogs WHERE targetUserId IN (?, ?) ORDER BY id",
+      [first.id, second.id],
     );
     expect(logs.some((row) => row.action === "super_admin.granted" && Number(row.actorUserId) === first.id && row.reason === "Test grant" && row.actorIp === "127.0.0.1")).toBe(true);
     expect(logs.some((row) => row.action === "super_admin.revoked" && Number(row.actorUserId) === second.id)).toBe(true);
