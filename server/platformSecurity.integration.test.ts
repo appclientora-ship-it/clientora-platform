@@ -126,6 +126,22 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     await expect(registerLocalUser({ name: "Duplicate", email, password: "Another-password-123" })).rejects.toThrow("هذا البريد مسجل بالفعل");
   });
 
+  it("allows unlimited staff before plan activation but enforces the selected limit at activation", async () => {
+    const slug = `pending-plan-test-${randomUUID().slice(0, 8)}`;
+    const [tenantResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO tenants (name, slug, status, currency) VALUES (?, ?, 'trial', 'OMR')",
+      ["Pending Plan Test", slug],
+    );
+    const tenantId = Number(tenantResult.insertId);
+    createdTenantIds.push(tenantId);
+    await updateTenantSubscription({ tenantId, action: "select_plan", planKey: "Solo" }, 1);
+    await addStaff(tenantId, { name: "Pending Staff 1", role: "Barber" });
+    await addStaff(tenantId, { name: "Pending Staff 2", role: "Barber" });
+    await expect(updateTenantSubscription({ tenantId, action: "activate" }, 1)).rejects.toThrow("لا يمكن تشغيل الاشتراك");
+    await updateTenantSubscription({ tenantId, action: "select_plan", planKey: "S3" }, 1);
+    await expect(updateTenantSubscription({ tenantId, action: "activate" }, 1)).resolves.toMatchObject({ success: true });
+  });
+
   it("manages subscription plans, renewal dates, grace periods, and admin audit events", async () => {
     const slug = `subscription-test-${randomUUID().slice(0, 8)}`;
     const [tenantResult] = await connection.execute<mysql.ResultSetHeader>(

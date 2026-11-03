@@ -202,6 +202,14 @@ export async function updateTenantSubscription(
       if (subscription) await tx.update(tenantSubscriptions).set({ status: "suspended" }).where(eq(tenantSubscriptions.id, subscription.id));
     } else {
       if (!subscription?.planId) throw new Error("اختر باقة قبل تشغيل الاشتراك أو تجديده");
+      const selectedPlan = (await tx.select({ staffLimit: subscriptionPlans.staffLimit }).from(subscriptionPlans)
+        .where(eq(subscriptionPlans.id, subscription.planId)).limit(1))[0];
+      if (!selectedPlan) throw new Error("تعذر العثور على الباقة المحددة");
+      const [activeStaffCount] = await tx.select({ total: count() }).from(staff)
+        .where(and(eq(staff.tenantId, input.tenantId), eq(staff.active, 1)));
+      if (Number(activeStaffCount?.total ?? 0) > selectedPlan.staffLimit) {
+        throw new Error(`لا يمكن تشغيل الاشتراك؛ لدى الصالون ${activeStaffCount.total} موظفين نشطين والباقة تسمح بـ ${selectedPlan.staffLimit} فقط.`);
+      }
       if (input.action === "activate") {
         const existingEnd = subscription.currentPeriodEnd;
         const stillPaidThrough = existingEnd && existingEnd.getTime() > now.getTime();
