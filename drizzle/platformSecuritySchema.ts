@@ -21,6 +21,6 @@ export const platformAdminAuditLogs = mysqlTable("platformAdminAuditLogs", {
 
 export const rateLimitBuckets = mysqlTable("rateLimitBuckets", {
   bucketKey: varchar("bucketKey", { length: 64 }).primaryKey(),
-  count: int("count").unsigned().notNull(),
+  count: int("count").notNull(),
   resetAt: timestamp("resetAt", { mode: "date", fsp: 3 }).notNull(),
 });
