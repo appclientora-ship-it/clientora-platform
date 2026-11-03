@@ -3,7 +3,7 @@ import mysql from "mysql2/promise";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapFirstSuperAdmin, setPlatformAdminRole } from "./platformAdmin";
 import { registerLocalUser, loginLocalUser, createEmailVerificationToken, verifyEmailToken, resendEmailVerification } from "./localAuth";
-import { upsertUser } from "./db";
+import { createTenantForUser, upsertUser } from "./db";
 import { consumeSharedRateLimit } from "./_core/rateLimit";
 import { createContext } from "./_core/context";
 import { sessionForUser } from "./localAuth";
@@ -20,6 +20,7 @@ try {
 describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQL only)", () => {
   const secret = "test-only-super-admin-bootstrap-secret-32-bytes-minimum";
   const createdUserIds: number[] = [];
+  const createdTenantIds: number[] = [];
   const rateKeys: string[] = [];
   let connection: mysql.Connection;
 
@@ -45,6 +46,8 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
           [...createdUserIds, ...createdUserIds],
         );
       }
+      for (const id of createdTenantIds) await connection.execute("DELETE FROM tenantMembers WHERE tenantId = ?", [id]);
+      for (const id of createdTenantIds) await connection.execute("DELETE FROM tenants WHERE id = ?", [id]);
       for (const id of createdUserIds) await connection.execute("DELETE FROM emailVerifications WHERE userId = ?", [id]);
       for (const id of createdUserIds) await connection.execute("DELETE FROM users WHERE id = ?", [id]);
       for (const key of rateKeys) {
@@ -117,6 +120,32 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     await connection.execute("UPDATE users SET emailVerifiedAt = NOW(3) WHERE id = ?", [user.id]);
     expect((await loginLocalUser(email.toUpperCase(), "Integration-test-password-123")).id).toBe(user.id);
     await expect(registerLocalUser({ name: "Duplicate", email, password: "Another-password-123" })).rejects.toThrow("هذا البريد مسجل بالفعل");
+  });
+
+  it("prevents staff and managers from creating a separate owner workspace", async () => {
+    for (const role of ["staff", "manager"] as const) {
+      const user = await newUser(`Existing ${role}`);
+      const slug = `membership-${role}-${randomUUID().slice(0, 8)}`;
+      const [tenantResult] = await connection.execute<mysql.ResultSetHeader>(
+        "INSERT INTO tenants (name, slug, status, currency) VALUES (?, ?, 'trial', 'OMR')",
+        [`Membership ${role}`, slug],
+      );
+      const tenantId = Number(tenantResult.insertId);
+      createdTenantIds.push(tenantId);
+      await connection.execute(
+        "INSERT INTO tenantMembers (tenantId, userId, role) VALUES (?, ?, ?)",
+        [tenantId, user.id, role],
+      );
+      await expect(createTenantForUser(user.id, {
+        name: "Unauthorized Owner Workspace",
+        slug: `unauthorized-${role}-${randomUUID().slice(0, 8)}`,
+      })).rejects.toThrow("مرتبط بشركة بالفعل");
+      const [owned] = await connection.execute<mysql.RowDataPacket[]>(
+        "SELECT id FROM tenantMembers WHERE userId = ? AND role = 'owner'",
+        [user.id],
+      );
+      expect(owned).toHaveLength(0);
+    }
   });
 
   it("does not promote users through profile synchronization, even if the legacy owner variable is set", async () => {

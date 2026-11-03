@@ -102,9 +102,11 @@ export async function createTenantForUser(userId: number, input: {name:string; s
       // Serialize workspace creation per account, then allow only the first owner workspace.
       const account = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update").limit(1);
       if (!account[0]) throw new Error("الحساب غير موجود");
-      const ownedWorkspace = await tx.select({ id: tenantMembers.id }).from(tenantMembers)
-        .where(and(eq(tenantMembers.userId, userId), eq(tenantMembers.role, "owner"))).limit(1);
-      if (ownedWorkspace[0]) throw new Error("هذا الحساب لديه شركة بالفعل");
+      const existingMembership = await tx.select({ id: tenantMembers.id }).from(tenantMembers)
+        .where(eq(tenantMembers.userId, userId)).limit(1);
+      if (existingMembership[0]) {
+        throw new Error("هذا الحساب مرتبط بشركة بالفعل؛ لا يمكنه إنشاء شركة جديدة من حساب الموظف أو المدير");
+      }
       const existing = await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
       if (existing[0]) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
       const tenantResult = await tx.insert(tenants).values({name:input.name.trim(), slug:input.slug, city:input.city?.trim() || null, currency:input.currency ?? "ر.ع", status:"trial"});
