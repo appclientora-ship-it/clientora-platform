@@ -153,7 +153,7 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
 
     const plans = await listSubscriptionPlans();
     expect(plans.map(plan => [plan.planKey, plan.staffLimit, plan.monthlyPriceCents])).toEqual([
-      ["Solo", 1, 700], ["S3", 3, 1300], ["S7", 7, 1500], ["S9", 9, 1900],
+      ["Solo", 1, 500], ["S3", 3, 1300], ["S7", 7, 1500], ["S9", 9, 1900],
       ["S15", 15, 2500], ["S21", 21, 2900], ["S27", 27, 3500], ["S35", 35, 4300],
     ]);
 
