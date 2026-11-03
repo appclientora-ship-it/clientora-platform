@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, isNull, lte, ne } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users } from "../drizzle/schema";
+import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users, subscriptionPlans, tenantSubscriptions } from "../drizzle/schema";
 import { buildBookingDemand } from './bookingDemand';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -93,7 +93,33 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result[0];
 }
-export async function listTenants() { const db = await getDb(); return db ? db.select({ id: tenants.id, name: tenants.name, slug: tenants.slug, city: tenants.city, currency: tenants.currency, status: tenants.status, createdAt: tenants.createdAt }).from(tenants).orderBy(desc(tenants.createdAt)) : []; }
+export async function listTenants() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: tenants.id,
+    name: tenants.name,
+    slug: tenants.slug,
+    city: tenants.city,
+    countryCode: tenants.countryCode,
+    currency: tenants.currency,
+    status: tenants.status,
+    createdAt: tenants.createdAt,
+    planKey: subscriptionPlans.planKey,
+    staffLimit: subscriptionPlans.staffLimit,
+    monthlyPriceCents: subscriptionPlans.monthlyPriceCents,
+    planCurrency: subscriptionPlans.currency,
+    subscriptionStatus: tenantSubscriptions.status,
+    currentPeriodStart: tenantSubscriptions.currentPeriodStart,
+    currentPeriodEnd: tenantSubscriptions.currentPeriodEnd,
+    gracePeriodEndsAt: tenantSubscriptions.gracePeriodEndsAt,
+    graceDays: tenantSubscriptions.graceDays,
+    autoRenew: tenantSubscriptions.autoRenew,
+  }).from(tenants)
+    .leftJoin(tenantSubscriptions, eq(tenantSubscriptions.tenantId, tenants.id))
+    .leftJoin(subscriptionPlans, eq(subscriptionPlans.id, tenantSubscriptions.planId))
+    .orderBy(desc(tenants.createdAt));
+}
 export async function setTenantStatus(tenantId:number,status:"active"|"trial"|"suspended",actorUserId:number) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(tenants).set({status}).where(eq(tenants.id,tenantId)); await db.insert(auditLogs).values({tenantId,actorUserId,action:`tenant.${status}`,entity:"tenant",entityId:tenantId}); return (await db.select().from(tenants).where(eq(tenants.id,tenantId)).limit(1))[0]; }
 export async function createTenantForUser(userId: number, input: {name:string; slug:string; city?:string; currency?:string}) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");

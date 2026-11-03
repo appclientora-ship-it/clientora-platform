@@ -9,7 +9,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 
 type Language = "ar" | "en" | "ru";
 type StatusFilter = "all" | "active" | "trial" | "suspended";
-type TenantRow = { id:number; name:string; slug:string; city:string|null; currency:string; status:string; createdAt:Date|string };
+type TenantRow = { id:number; name:string; slug:string; city:string|null; countryCode:string|null; currency:string; status:string; createdAt:Date|string; planKey:string|null; staffLimit:number|null; monthlyPriceCents:number|null; planCurrency:string|null; subscriptionStatus:string|null; currentPeriodStart:Date|string|null; currentPeriodEnd:Date|string|null; gracePeriodEndsAt:Date|string|null; graceDays:number|null; autoRenew:number|null };
 
 const copy = {
   ar: {
@@ -17,7 +17,7 @@ const copy = {
     overview:"نظرة عامة", companies:"الشركات", security:"وصول آمن", readOnly:"عرض فقط حالياً",
     total:"إجمالي الشركات", active:"اشتراكات نشطة", trial:"فترة تجريبية", suspended:"موقوفة",
     directory:"دليل الشركات", directoryHint:"قائمة الشركات المسجلة وحالتها الحالية", search:"ابحث بالاسم أو الرابط أو المدينة",
-    all:"الكل", refresh:"تحديث", company:"الشركة", location:"المدينة", status:"الحالة", created:"تاريخ التسجيل", id:"المعرّف",
+    all:"الكل", refresh:"تحديث", company:"الشركة", location:"المدينة", country:"الدولة", plan:"الباقة", renewal:"موعد التجديد", noPlan:"لم يختر باقة", status:"الحالة", created:"تاريخ التسجيل", id:"المعرّف",
     empty:"لا توجد شركات تطابق البحث.", none:"لا توجد شركات مسجلة حتى الآن.", loading:"جارٍ تحميل بيانات الشركات…",
     error:"تعذر تحميل البيانات. تحقق من الاتصال ثم حاول مجدداً.", retry:"إعادة المحاولة", logout:"تسجيل الخروج",
     activeLabel:"نشطة", trialLabel:"تجريبية", suspendedLabel:"موقوفة", noCity:"غير محدد",
@@ -30,7 +30,7 @@ const copy = {
     overview:"Overview", companies:"Companies", security:"Secure access", readOnly:"Read-only for now",
     total:"Total companies", active:"Active", trial:"On trial", suspended:"Suspended",
     directory:"Company directory", directoryHint:"Registered companies and their current status", search:"Search name, slug or city",
-    all:"All", refresh:"Refresh", company:"Company", location:"City", status:"Status", created:"Created", id:"ID",
+    all:"All", refresh:"Refresh", company:"Company", location:"City", country:"Country", plan:"Plan", renewal:"Renewal", noPlan:"No plan selected", status:"Status", created:"Created", id:"ID",
     empty:"No companies match this search.", none:"No companies registered yet.", loading:"Loading company data…",
     error:"Could not load data. Check the connection and try again.", retry:"Try again", logout:"Sign out",
     activeLabel:"Active", trialLabel:"Trial", suspendedLabel:"Suspended", noCity:"Not specified",
@@ -43,7 +43,7 @@ const copy = {
     overview:"Обзор", companies:"Компании", security:"Безопасный доступ", readOnly:"Пока только просмотр",
     total:"Всего компаний", active:"Активные", trial:"Пробный период", suspended:"Приостановлены",
     directory:"Список компаний", directoryHint:"Зарегистрированные компании и их текущий статус", search:"Поиск по названию, адресу или городу",
-    all:"Все", refresh:"Обновить", company:"Компания", location:"Город", status:"Статус", created:"Дата регистрации", id:"ID",
+    all:"Все", refresh:"Обновить", company:"Компания", location:"Город", country:"Страна", plan:"Тариф", renewal:"Продление", noPlan:"Тариф не выбран", status:"Статус", created:"Дата регистрации", id:"ID",
     empty:"Компании не найдены.", none:"Пока нет зарегистрированных компаний.", loading:"Загрузка данных…",
     error:"Не удалось загрузить данные. Проверьте соединение и повторите попытку.", retry:"Повторить", logout:"Выйти",
     activeLabel:"Активна", trialLabel:"Пробная", suspendedLabel:"Приостановлена", noCity:"Не указано",
@@ -79,7 +79,7 @@ export default function PlatformAdmin() {
   }),[rows]);
   const filtered = useMemo(() => rows.filter(row => {
     const q=query.trim().toLocaleLowerCase();
-    const matches = !q || [row.name,row.slug,row.city ?? "",String(row.id)].some(v=>v.toLocaleLowerCase().includes(q));
+    const matches = !q || [row.name,row.slug,row.city ?? "",row.countryCode ?? "",row.planKey ?? "",String(row.id)].some(v=>v.toLocaleLowerCase().includes(q));
     return matches && (filter==="all" || row.status===filter);
   }),[rows,query,filter]);
   const formatDate = (value:Date|string) => {
@@ -87,6 +87,16 @@ export default function PlatformAdmin() {
     if (Number.isNaN(d.getTime())) return "—";
     return new Intl.DateTimeFormat(lang==="ar"?"ar-OM":lang==="ru"?"ru-RU":"en-GB",{day:"2-digit",month:"short",year:"numeric"}).format(d);
   };
+  const countryLabel = (code:string|null) => {
+    if (!code) return t.noCity;
+    try {
+      return new Intl.DisplayNames([lang==="ar"?"ar-OM":lang==="ru"?"ru-RU":"en"], { type:"region" }).of(code) ?? code;
+    } catch { return code; }
+  };
+  const planLabel = (row:TenantRow) => row.planKey && row.monthlyPriceCents !== null
+    ? `${row.planKey} · ${(row.monthlyPriceCents / 100).toFixed(0)}/mo · ${row.staffLimit} staff`
+    : t.noPlan;
+  const renewalLabel = (row:TenantRow) => row.currentPeriodEnd ? formatDate(row.currentPeriodEnd) : "—";
   const label = (status:string) => status==="active"?t.activeLabel:status==="trial"?t.trialLabel:status==="suspended"?t.suspendedLabel:status;
   const nav = [{id:"overview" as const,label:t.overview,icon:LayoutDashboard},{id:"companies" as const,label:t.companies,icon:Building2}];
 
@@ -150,7 +160,7 @@ export default function PlatformAdmin() {
             <section className="sa-panel">
               <div className="sa-panel-head"><div><div className="sa-panel-title">{t.directory}</div><div className="sa-panel-hint">{t.directoryHint}</div></div><div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",width:"min(100%,420px)"}}><div className="sa-search-wrap"><Search size={15}/><input className="sa-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.search}/></div><button className="sa-btn" onClick={()=>tenants.refetch()} disabled={tenants.isFetching}><RefreshCw size={14}/>{t.refresh}</button></div></div>
               <div className="sa-filters">{(["all","active","trial","suspended"] as StatusFilter[]).map(key=><button key={key} className={"sa-filter "+(filter===key?"active":"")} onClick={()=>setFilter(key)}>{key==="all"?t.all:key==="active"?t.activeLabel:key==="trial"?t.trialLabel:t.suspendedLabel} ({key==="all"?counts.all:counts[key]})</button>)}</div>
-              {filtered.length===0?<div className="sa-empty"><div className="sa-empty-icon"><Store size={21}/></div>{rows.length?t.empty:t.none}</div>:<div className="sa-table-wrap"><table className="sa-table"><thead><tr><th>{t.id}</th><th>{t.company}</th><th>{t.location}</th><th>{t.status}</th><th>{t.created}</th></tr></thead><tbody>{filtered.map(row=>{const meta=statusMeta[row.status as keyof typeof statusMeta];const Icon=meta?.icon??Activity;return <tr key={row.id}><td className="sa-id">#{row.id}</td><td><div className="sa-company"><div className="sa-company-mark"><Store size={17}/></div><div><div className="sa-company-name">{row.name}</div><div className="sa-company-slug">{row.slug}</div></div></div></td><td>{row.city||t.noCity}</td><td><span className={"sa-status "+(meta?.tone??"amber")}><Icon size={12}/>{label(row.status)}</span></td><td>{formatDate(row.createdAt)}</td></tr>})}</tbody></table></div>}
+              {filtered.length===0?<div className="sa-empty"><div className="sa-empty-icon"><Store size={21}/></div>{rows.length?t.empty:t.none}</div>:<div className="sa-table-wrap"><table className="sa-table"><thead><tr><th>{t.id}</th><th>{t.company}</th><th>{t.location}</th><th>{t.country}</th><th>{t.plan}</th><th>{t.status}</th><th>{t.renewal}</th><th>{t.created}</th></tr></thead><tbody>{filtered.map(row=>{const meta=statusMeta[row.status as keyof typeof statusMeta];const Icon=meta?.icon??Activity;return <tr key={row.id}><td className="sa-id">#{row.id}</td><td><div className="sa-company"><div className="sa-company-mark"><Store size={17}/></div><div><div className="sa-company-name">{row.name}</div><div className="sa-company-slug">{row.slug}</div></div></div></td><td>{row.city||t.noCity}</td><td>{countryLabel(row.countryCode)}</td><td><div className="sa-company-name">{planLabel(row)}</div>{row.autoRenew===1?<div className="sa-company-slug">Auto-renew on</div>:null}</td><td><span className={"sa-status "+(meta?.tone??"amber")}><Icon size={12}/>{label(row.status)}</span>{row.subscriptionStatus && row.subscriptionStatus!=="active"?<div className="sa-company-slug">{row.subscriptionStatus}</div>:null}</td><td>{renewalLabel(row)}</td><td>{formatDate(row.createdAt)}</td></tr>})}</tbody></table></div>}
             </section>
             <div className="sa-note"><CircleAlert size={18} style={{flexShrink:0,marginTop:1}}/><div><strong>{t.noteTitle}</strong><p>{t.note}</p></div></div>
           </>}
