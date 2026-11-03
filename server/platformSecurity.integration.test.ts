@@ -5,6 +5,8 @@ import { bootstrapFirstSuperAdmin, setPlatformAdminRole } from "./platformAdmin"
 import { registerLocalUser, loginLocalUser } from "./localAuth";
 import { upsertUser } from "./db";
 import { consumeSharedRateLimit } from "./_core/rateLimit";
+import { createContext } from "./_core/context";
+import { sessionForUser } from "./localAuth";
 
 const databaseUrl = process.env.DATABASE_URL;
 let safeTestDatabase = false;
@@ -110,6 +112,22 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     );
     expect(logs.some((row) => row.action === "super_admin.granted" && Number(row.actorUserId) === first.id && row.reason === "Test grant" && row.actorIp === "127.0.0.1")).toBe(true);
     expect(logs.some((row) => row.action === "super_admin.revoked" && Number(row.actorUserId) === second.id)).toBe(true);
+  });
+
+  it("reloads the account role for an existing session after Super Admin revocation", async () => {
+    const first = await newUser("Revoked Admin");
+    const second = await newUser("Active Admin");
+    await bootstrapFirstSuperAdmin(first.id);
+    await setPlatformAdminRole(first.id, second.id, true, { reason: "Session revocation test" });
+    const token = sessionForUser(first);
+    await setPlatformAdminRole(second.id, first.id, false, { reason: "Revoke previous admin" });
+
+    const context = await createContext({
+      req: { headers: { cookie: `clientora_session=${token}` } } as any,
+      res: {} as any,
+    });
+    expect(context.user?.id).toBe(first.id);
+    expect(context.user?.role).toBe("user");
   });
 
   it("shares one rate-limit counter across independent callers", async () => {
