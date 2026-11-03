@@ -45,6 +45,7 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
           [...createdUserIds, ...createdUserIds],
         );
       }
+      for (const id of createdUserIds) await connection.execute("DELETE FROM emailVerifications WHERE userId = ?", [id]);
       for (const id of createdUserIds) await connection.execute("DELETE FROM users WHERE id = ?", [id]);
       for (const key of rateKeys) {
         const hash = createHash("sha256").update(key).digest("hex");
@@ -136,6 +137,7 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
   it("reloads the account role for an existing session after Super Admin revocation", async () => {
     const first = await newUser("Revoked Admin");
     const second = await newUser("Active Admin");
+    process.env.PLATFORM_OWNER_EMAIL = first.email!;
     await bootstrapFirstSuperAdmin(first.id);
     await setPlatformAdminRole(first.id, second.id, true, { reason: "Session revocation test" });
     const token = sessionForUser(first);
