@@ -130,6 +130,13 @@ describe.skipIf(!integrationEnabled)("MySQL public booking concurrency", () => {
       "SELECT id FROM bookings WHERE tenantId = ? AND idempotencyKey = ?", [tenantId, payload.idempotencyKey],
     );
     expect(rows).toHaveLength(1);
+
+    await connection.execute("UPDATE tenants SET status = 'suspended' WHERE id = ?", [tenantId]);
+    await expect(createPublicBooking(payload)).rejects.toThrow("الحجوزات العامة متوقفة لهذا النشاط");
+    const [rowsAfterSuspension] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT id FROM bookings WHERE tenantId = ? AND idempotencyKey = ?", [tenantId, payload.idempotencyKey],
+    );
+    expect(rowsAfterSuspension).toHaveLength(1);
     tenantId = previousTenantId;
   });
 

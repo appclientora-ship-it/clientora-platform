@@ -795,6 +795,7 @@ export async function createPublicBooking(input: {slug:string; clientName:string
 
   const tenantRows = await tx.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
   const tenant = tenantRows[0]; if (!tenant) throw new Error("Company not found");
+  if (!isTenantPublicBookingEnabled(tenant.status)) throw new Error("الحجوزات العامة متوقفة لهذا النشاط");
   const previousRows = await tx.select().from(bookings).where(and(eq(bookings.tenantId, tenant.id), eq(bookings.idempotencyKey, idempotencyKey))).limit(1);
   if (previousRows[0]) {
     const previous = previousRows[0];
@@ -802,7 +803,6 @@ export async function createPublicBooking(input: {slug:string; clientName:string
     const previousItems = await tx.select({name:services.name}).from(bookingItems).innerJoin(services, eq(bookingItems.serviceId, services.id)).where(and(eq(bookingItems.tenantId, tenant.id), eq(bookingItems.bookingId, previous.id)));
     return { id:previous.id, bookingId:previous.id, tenantId:tenant.id, tenantName:tenant.name, serviceName:previousItems.map(item=>item.name).join(" + "), totalDuration:previous.durationMinutes, totalPrice:previous.totalPrice };
   }
-   if (!isTenantPublicBookingEnabled(tenant.status)) throw new Error("الحجوزات العامة متوقفة لهذا النشاط");
   const ids = Array.from(new Set(input.serviceIds?.length ? input.serviceIds : [input.serviceId]));
   const serviceRows = await tx.select().from(services).where(and(eq(services.tenantId, tenant.id), eq(services.active, 1)));
   const selectedServices = ids.map(id => serviceRows.find(item => item.id === id)).filter(Boolean) as typeof serviceRows;
