@@ -65,11 +65,11 @@ function FirstWorkspaceSetup() {
   });
   const updateName = (value:string) => {
     setName(value);
-    if (!slugTouched) setSlug(value.normalize("NFKD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,120));
+    if (!slugTouched) setSlug(value.normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,120));
   };
   const submit = (event:React.FormEvent) => {
     event.preventDefault();
-    const cleanName=name.trim(), cleanSlug=slug.trim().toLowerCase().replace(/\\s+/g,"-");
+    const cleanName=name.trim(), cleanSlug=slug.trim().toLowerCase().replace(/\s+/g,"-");
     if(!cleanName || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(cleanSlug)) { window.alert(copy.required); return; }
     create.mutate({name:cleanName,slug:cleanSlug,city:city.trim() || undefined,currency:"ر.ع"});
   };
