@@ -380,9 +380,9 @@ export async function getEmployeeReports(tenantId:number,fromDate:string,toDate:
 export async function listExpenses(tenantId:number,fromDate:string,toDate:string) { const db=await getDb(); return db ? db.select().from(expenses).where(and(eq(expenses.tenantId,tenantId),gte(expenses.date,fromDate),lte(expenses.date,toDate))).orderBy(desc(expenses.date),desc(expenses.id)) : []; }
 export async function createExpense(tenantId:number,createdBy:number,input:{category:string;description:string;vendor?:string;amount:number;date:string;paymentMethod:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(expenses).values({...input,tenantId,createdBy,vendor:input.vendor || null}); const id=Number(result[0].insertId); await db.insert(auditLogs).values({tenantId,actorUserId:createdBy,action:"expense.created",entity:"expense",entityId:id}); return (await db.select().from(expenses).where(eq(expenses.id,id)).limit(1))[0]; }
 export async function getTenantForUser(user: User) {
-  const db = await getDb(); if (!db) return undefined;
-  // Never infer a workspace for platform admins or silently choose one when
-  // a user belongs to multiple tenants. A workspace must be unambiguous.
+  const db = await getDb(); if (!db || user.role === "admin") return undefined;
+  // Platform admins use platform-only procedures. For other users, never
+  // silently choose a workspace when multiple active memberships exist.
   const rows = await db.select({ tenant: tenants }).from(tenantMembers)
     .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
     .where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(2);
