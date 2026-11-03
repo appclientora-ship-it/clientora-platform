@@ -108,8 +108,8 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
       "SELECT action, actorUserId, targetUserId, reason, actorIp, actorUserAgent FROM platformAdminAuditLogs WHERE targetUserId = ? ORDER BY id",
       [second.id],
     );
-    expect(logs.some((row) => row.action === "super_admin.granted" && row.actorUserId === first.id && row.reason === "Test grant" && row.actorIp === "127.0.0.1")).toBe(true);
-    expect(logs.some((row) => row.action === "super_admin.revoked" && row.actorUserId === second.id)).toBe(true);
+    expect(logs.some((row) => row.action === "super_admin.granted" && Number(row.actorUserId) === first.id && row.reason === "Test grant" && row.actorIp === "127.0.0.1")).toBe(true);
+    expect(logs.some((row) => row.action === "super_admin.revoked" && Number(row.actorUserId) === second.id)).toBe(true);
   });
 
   it("shares one rate-limit counter across independent callers", async () => {
