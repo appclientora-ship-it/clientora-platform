@@ -3,7 +3,7 @@ import mysql from "mysql2/promise";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapFirstSuperAdmin, setPlatformAdminRole } from "./platformAdmin";
 import { registerLocalUser, loginLocalUser, createEmailVerificationToken, verifyEmailToken, resendEmailVerification } from "./localAuth";
-import { createTenantForUser, upsertUser } from "./db";
+import { createTenantForUser, upsertUser, listSubscriptionPlans, updateTenantSubscription } from "./db";
 import { consumeSharedRateLimit } from "./_core/rateLimit";
 import { createContext } from "./_core/context";
 import { sessionForUser } from "./localAuth";
@@ -122,6 +122,62 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     await connection.execute("UPDATE users SET emailVerifiedAt = NOW(3) WHERE id = ?", [user.id]);
     expect((await loginLocalUser(email.toUpperCase(), "Integration-test-password-123")).id).toBe(user.id);
     await expect(registerLocalUser({ name: "Duplicate", email, password: "Another-password-123" })).rejects.toThrow("هذا البريد مسجل بالفعل");
+  });
+
+  it("manages subscription plans, renewal dates, grace periods, and admin audit events", async () => {
+    const slug = `subscription-test-${randomUUID().slice(0, 8)}`;
+    const [tenantResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO tenants (name, slug, status, currency, countryCode) VALUES (?, ?, 'trial', 'OMR', 'OM')",
+      ["Subscription Test Salon", slug],
+    );
+    const tenantId = Number(tenantResult.insertId);
+    createdTenantIds.push(tenantId);
+
+    const plans = await listSubscriptionPlans();
+    expect(plans.map(plan => [plan.planKey, plan.staffLimit, plan.monthlyPriceCents])).toEqual([
+      ["Solo", 1, 700], ["S3", 3, 1300], ["S7", 7, 1500], ["S9", 9, 1900],
+      ["S15", 15, 2500], ["S21", 21, 2900], ["S27", 27, 3500], ["S35", 35, 4300],
+    ]);
+
+    await updateTenantSubscription({ tenantId, action: "select_plan", planKey: "S3" }, 1);
+    const [pendingRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT status, planId, graceDays FROM tenantSubscriptions WHERE tenantId = ?", [tenantId],
+    );
+    expect(pendingRows[0]).toMatchObject({ status: "pending", graceDays: 21 });
+    expect(Number(pendingRows[0].planId)).toBeGreaterThan(0);
+
+    await updateTenantSubscription({ tenantId, action: "activate" }, 1);
+    const [activeRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT status, currentPeriodStart, currentPeriodEnd, gracePeriodEndsAt, autoRenew FROM tenantSubscriptions WHERE tenantId = ?", [tenantId],
+    );
+    expect(activeRows[0]?.status).toBe("active");
+    expect(activeRows[0]?.currentPeriodEnd).toBeTruthy();
+    const firstEnd = new Date(activeRows[0].currentPeriodEnd);
+    const firstGraceEnd = new Date(activeRows[0].gracePeriodEndsAt);
+    expect(firstGraceEnd.getTime() - firstEnd.getTime()).toBe(21 * 86400000);
+
+    await updateTenantSubscription({ tenantId, action: "set_auto_renew", autoRenew: true }, 1);
+    await updateTenantSubscription({ tenantId, action: "renew" }, 1);
+    const [renewedRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT status, currentPeriodEnd, autoRenew FROM tenantSubscriptions WHERE tenantId = ?", [tenantId],
+    );
+    expect(renewedRows[0]?.status).toBe("active");
+    expect(Number(renewedRows[0]?.autoRenew)).toBe(1);
+    expect(new Date(renewedRows[0].currentPeriodEnd).getTime()).toBeGreaterThan(firstEnd.getTime());
+
+    await updateTenantSubscription({ tenantId, action: "suspend" }, 1);
+    const [suspendedRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT t.status AS tenantStatus, s.status AS subscriptionStatus FROM tenants t JOIN tenantSubscriptions s ON s.tenantId = t.id WHERE t.id = ?",
+      [tenantId],
+    );
+    expect(suspendedRows[0]).toMatchObject({ tenantStatus: "suspended", subscriptionStatus: "suspended" });
+    const [events] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT action FROM subscriptionEvents WHERE tenantId = ? ORDER BY id", [tenantId],
+    );
+    expect(events.map(event => event.action)).toEqual([
+      "subscription.select_plan", "subscription.activate", "subscription.set_auto_renew",
+      "subscription.renew", "subscription.suspend",
+    ]);
   });
 
   it("rejects staff invitation redemption when the tenant is suspended", async () => {
