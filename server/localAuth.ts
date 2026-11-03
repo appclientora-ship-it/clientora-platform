@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import nodemailer from "nodemailer";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { getDb } from "./db";
+import { consumeSharedRateLimit } from "./_core/rateLimit";
 import { passwordResets, emailVerifications, users, staffInvites, tenantMembers, staff, type User } from "../drizzle/schema";
 
 const SESSION_COOKIE = "clientora_session";
@@ -169,6 +170,9 @@ export async function resendEmailVerification(emailInput: string): Promise<{ mes
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
   const email = emailInput.trim().toLowerCase();
+  // Limit by normalized email as well as the route-level IP bucket.
+  const limit = await consumeSharedRateLimit(`auth.email-verification-resend:${email}`, 3, 60 * 60 * 1000);
+  if (!limit.allowed) throw new Error("تم طلب رسائل تفعيل كثيرة لهذا البريد. حاول مرة أخرى بعد ساعة.");
   const user = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];
   if (user && !user.emailVerifiedAt) await sendEmailVerification(user.id, email);
   return { message: "إذا كان البريد مسجلاً ويحتاج إلى تأكيد، فستصلك رسالة تفعيل." };
