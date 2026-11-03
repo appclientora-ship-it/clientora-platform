@@ -48,6 +48,45 @@ const isoDate = (date:Date, timeZone?:string) => {
 };
 const bookingFromDatabase = (row:{id:number;date:string;clientName:string;clientPhone:string;serviceName:string;staffId:number;startMinutes:number;durationMinutes:number;price:number;status:Status;paid:number;note:string|null}):Booking => ({id:row.id,date:row.date,client:row.clientName,phone:row.clientPhone,service:row.serviceName,staff:row.staffId,start:row.startMinutes,duration:row.durationMinutes,price:row.price,status:row.status,paid:Boolean(row.paid),note:row.note ?? ""});
 
+function FirstWorkspaceSetup() {
+  const { language } = useLanguage();
+  const [name,setName] = useState("");
+  const [slug,setSlug] = useState("");
+  const [city,setCity] = useState("Muscat");
+  const [slugTouched,setSlugTouched] = useState(false);
+  const copy = {
+    ar:{title:"ابدأ باستخدام Clientora",subtitle:"أنشئ مساحة شركتك الأولى. لا توجد شركات مسجلة في حسابك حتى الآن.",name:"اسم الصالون أو الشركة",slug:"رابط الشركة بالإنجليزية",city:"المدينة",submit:"إنشاء مساحة الشركة",busy:"جارٍ إنشاء مساحة الشركة...",hint:"سيتم إنشاء مساحة تجريبية وربط حسابك بها كمالك.",required:"أدخل اسم الشركة ورابطها بالإنجليزية.",error:"تعذر إنشاء مساحة الشركة"},
+    en:{title:"Set up your Clientora workspace",subtitle:"Create your first company workspace. No companies are registered on your account yet.",name:"Salon or company name",slug:"Company URL (English)",city:"City",submit:"Create workspace",busy:"Creating workspace...",hint:"A trial workspace will be created and your account will become its owner.",required:"Enter a company name and an English URL.",error:"Could not create workspace"},
+    ru:{title:"Создайте рабочее пространство Clientora",subtitle:"Создайте первую компанию. В вашем аккаунте пока нет зарегистрированных компаний.",name:"Название салона или компании",slug:"Ссылка на компанию (латиница)",city:"Город",submit:"Создать пространство",busy:"Создание пространства...",hint:"Будет создано пробное пространство, а ваш аккаунт станет владельцем.",required:"Введите название компании и ссылку латиницей.",error:"Не удалось создать пространство"}
+  }[language];
+  const create = trpc.workspace.createTenant.useMutation({
+    onSuccess:()=>window.location.assign("/"),
+    onError:error=>window.alert(error.message || copy.error)
+  });
+  const updateName = (value:string) => {
+    setName(value);
+    if (!slugTouched) setSlug(value.normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,120));
+  };
+  const submit = (event:React.FormEvent) => {
+    event.preventDefault();
+    const cleanName=name.trim(), cleanSlug=slug.trim().toLowerCase().replace(/\s+/g,"-");
+    if(!cleanName || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(cleanSlug)) { window.alert(copy.required); return; }
+    create.mutate({name:cleanName,slug:cleanSlug,city:city.trim() || undefined,currency:"ر.ع"});
+  };
+  return <main dir={language==="ar"?"rtl":"ltr"} style={{minHeight:"100vh",display:"grid",placeItems:"center",padding:24,background:"var(--background, #f6f8fa)"}}>
+    <form onSubmit={submit} style={{width:"min(100%,520px)",background:"white",border:"1px solid #e5e7eb",borderRadius:20,padding:32,boxShadow:"0 18px 55px rgba(20,35,50,.08)",display:"grid",gap:16}}>
+      <div style={{fontSize:13,fontWeight:700,color:"#0d8f83"}}>✿ Clientora</div>
+      <h1 style={{fontSize:26,margin:0,color:"#17212b"}}>{copy.title}</h1>
+      <p style={{margin:0,lineHeight:1.7,color:"#64748b"}}>{copy.subtitle}</p>
+      <label style={{display:"grid",gap:7,fontWeight:600,color:"#263445"}}>{copy.name}<input required minLength={2} maxLength={160} value={name} onChange={e=>updateName(e.target.value)} style={{padding:13,border:"1px solid #d8dee6",borderRadius:10,fontSize:16}} /></label>
+      <label style={{display:"grid",gap:7,fontWeight:600,color:"#263445"}}>{copy.slug}<input required dir="ltr" pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={120} value={slug} onChange={e=>{setSlugTouched(true);setSlug(e.target.value)}} placeholder="my-salon" style={{padding:13,border:"1px solid #d8dee6",borderRadius:10,fontSize:16}} /></label>
+      <label style={{display:"grid",gap:7,fontWeight:600,color:"#263445"}}>{copy.city}<input maxLength={120} value={city} onChange={e=>setCity(e.target.value)} style={{padding:13,border:"1px solid #d8dee6",borderRadius:10,fontSize:16}} /></label>
+      <p style={{margin:0,fontSize:13,color:"#64748b"}}>{copy.hint}</p>
+      <button type="submit" disabled={create.isPending} style={{padding:14,border:0,borderRadius:10,background:"#0d8f83",color:"white",fontWeight:700,fontSize:16,cursor:create.isPending?"wait":"pointer"}}>{create.isPending?copy.busy:copy.submit}</button>
+    </form>
+  </main>;
+}
+
 export default function Home() {
   const [active, setActive] = useState("dashboard");
   const [navItems, setNavItems] = useState(navDefaults);
@@ -115,6 +154,9 @@ export default function Home() {
   const updateBooking = (patch:Partial<Booking>) => { if (!selected) return; if (!tenantId) { notify(t("لا توجد مساحة عمل نشطة؛ لم يتم حفظ التعديل")); return; } bookingUpdate.mutate({tenantId,bookingId:selected.id,status:patch.status,paid:patch.paid,note:patch.note,durationMinutes:patch.duration,staffId:patch.staff,startMinutes:patch.start,date:patch.date}); };
   const removeNav = (id:string) => { setNavItems(items => items.filter(item => item.id !== id)); notify(t("تم إخفاء القسم من القائمة")); };
   const resetNav = () => { setNavItems(navDefaults); notify(t("تمت استعادة جميع الأقسام")); };
+
+  if (!isPlatformAdmin && workspaceQuery.isSuccess && !workspaceQuery.data) return <FirstWorkspaceSetup />;
+  if (workspaceQuery.isError) return <main className="min-h-screen flex items-center justify-center p-6"><section className="w-full max-w-md rounded-xl border p-6 text-center space-y-4"><h1 className="text-xl font-semibold">{language === "ar" ? "تعذر تحميل مساحة العمل" : language === "ru" ? "Не удалось загрузить рабочее пространство" : "Could not load your workspace"}</h1><p>{language === "ar" ? "تحقق من اتصال الإنترنت ثم حاول مرة أخرى." : language === "ru" ? "Проверьте подключение к интернету и попробуйте снова." : "Check your internet connection and try again."}</p><button className="rounded-lg px-4 py-2 font-medium" onClick={() => workspaceQuery.refetch()}>{language === "ar" ? "إعادة المحاولة" : language === "ru" ? "Повторить" : "Retry"}</button></section></main>;
 
   return <div className={`app-shell ${compact ? "compact" : ""}`} style={{"--brand":accent} as React.CSSProperties}>
     <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
