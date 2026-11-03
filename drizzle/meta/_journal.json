@@ -92,6 +92,41 @@
       "when": 1793523600000,
       "tag": "0015_staff_time_off",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1793527200000,
+      "tag": "0016_platform_admin_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1793708460000,
+      "tag": "0017_email_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "5",
+      "when": 1793710000000,
+      "tag": "0018_subscription_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1793710500000,
+      "tag": "0019_subscription_pending_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1793710800000,
+      "tag": "0020_correct_solo_plan_price",
+      "breakpoints": true
     }
   ]
 }

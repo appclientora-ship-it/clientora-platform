@@ -1,6 +1,6 @@
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
-import { InMemoryRateLimiter } from "./rateLimit";
+import { consumeSharedRateLimit } from "./rateLimit";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 
@@ -12,10 +12,10 @@ export const router = t.router;
 export const publicProcedure = t.procedure;
 
 function rateLimited(scope: string, limit: number, windowMs: number) {
-  const limiter = new InMemoryRateLimiter(limit, windowMs);
-  return t.middleware(({ ctx, next }) => {
+  return t.middleware(async ({ ctx, next }) => {
     const ip = ctx.req.ip || ctx.req.socket.remoteAddress || "unknown";
-    const result = limiter.consume(scope + ":" + ip);
+    // A database outage must not silently disable brute-force protection.
+    const result = await consumeSharedRateLimit(scope + ":" + ip, limit, windowMs);
     if (!result.allowed) {
       ctx.res.setHeader("Retry-After", String(result.retryAfterSeconds));
       throw new TRPCError({

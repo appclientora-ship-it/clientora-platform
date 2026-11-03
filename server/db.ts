@@ -1,8 +1,7 @@
-import { and, desc, eq, gte, isNull, lte, ne } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNull, lte, ne } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users, subscriptionPlans, tenantSubscriptions, subscriptionEvents } from "../drizzle/schema";
 import { buildBookingDemand } from './bookingDemand';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -13,7 +12,9 @@ export async function getDb() {
   return _db;
 }
 
-export async function upsertUser(user: InsertUser): Promise<void> {
+// Identity/profile synchronization must never grant or revoke platform privileges.
+// Super-admin role changes are handled only by the audited platformAdmin service.
+export async function upsertUser(user: Omit<InsertUser, "role">): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb(); if (!db) throw new Error("Database is not available");
   const values: InsertUser = { openId: user.openId };
@@ -22,8 +23,6 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     if (user[field] !== undefined) { values[field] = user[field] ?? null; updateSet[field] = user[field] ?? null; }
   });
   if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
-  if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
-  else if (user.openId === ENV.ownerOpenId) { values.role = 'admin'; updateSet.role = 'admin'; }
   values.lastSignedIn ??= new Date();
   if (!Object.keys(updateSet).length) updateSet.lastSignedIn = new Date();
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
@@ -94,7 +93,187 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result[0];
 }
-export async function listTenants() { const db = await getDb(); return db ? db.select({ id: tenants.id, name: tenants.name, slug: tenants.slug, city: tenants.city, currency: tenants.currency, status: tenants.status, createdAt: tenants.createdAt }).from(tenants).orderBy(desc(tenants.createdAt)) : []; }
+
+
+export async function runSubscriptionMaintenance(now = new Date()) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  return db.transaction(async (tx) => {
+    let graceStarted = 0;
+    let suspended = 0;
+    const expired = await tx.select().from(tenantSubscriptions)
+      .where(and(eq(tenantSubscriptions.status, "active"), lte(tenantSubscriptions.currentPeriodEnd, now)))
+      .for("update");
+    for (const subscription of expired) {
+      if (!subscription.currentPeriodEnd) continue;
+      const graceEnd = new Date(subscription.currentPeriodEnd.getTime() + subscription.graceDays * 86400000);
+      const graceExpired = graceEnd.getTime() <= now.getTime();
+      await tx.update(tenantSubscriptions).set({
+        status: graceExpired ? "suspended" : "past_due",
+        gracePeriodEndsAt: graceEnd,
+      }).where(eq(tenantSubscriptions.id, subscription.id));
+      if (graceExpired) {
+        await tx.update(tenants).set({ status: "suspended" }).where(eq(tenants.id, subscription.tenantId));
+        suspended++;
+      } else {
+        graceStarted++;
+      }
+      await tx.insert(subscriptionEvents).values({
+        tenantId: subscription.tenantId,
+        actorUserId: null,
+        action: graceExpired ? "subscription.grace_expired" : "subscription.grace_started",
+        details: JSON.stringify({ periodEnd: subscription.currentPeriodEnd, gracePeriodEndsAt: graceEnd, graceDays: subscription.graceDays }),
+      });
+    }
+
+    const graceExpiredRows = await tx.select().from(tenantSubscriptions)
+      .where(and(eq(tenantSubscriptions.status, "past_due"), lte(tenantSubscriptions.gracePeriodEndsAt, now)))
+      .for("update");
+    for (const subscription of graceExpiredRows) {
+      await tx.update(tenantSubscriptions).set({ status: "suspended" })
+        .where(eq(tenantSubscriptions.id, subscription.id));
+      await tx.update(tenants).set({ status: "suspended" }).where(eq(tenants.id, subscription.tenantId));
+      await tx.insert(subscriptionEvents).values({
+        tenantId: subscription.tenantId,
+        actorUserId: null,
+        action: "subscription.grace_expired",
+        details: JSON.stringify({ gracePeriodEndsAt: subscription.gracePeriodEndsAt }),
+      });
+      suspended++;
+    }
+    return { graceStarted, suspended };
+  });
+}
+
+export async function listSubscriptionPlans() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    planKey: subscriptionPlans.planKey,
+    staffLimit: subscriptionPlans.staffLimit,
+    monthlyPriceCents: subscriptionPlans.monthlyPriceCents,
+    currency: subscriptionPlans.currency,
+  }).from(subscriptionPlans).where(eq(subscriptionPlans.active, 1)).orderBy(asc(subscriptionPlans.monthlyPriceCents));
+}
+
+function addCalendarMonth(value: Date) {
+  const year = value.getUTCFullYear();
+  const month = value.getUTCMonth() + 1;
+  const day = value.getUTCDate();
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(day, lastDay), value.getUTCHours(), value.getUTCMinutes(), value.getUTCSeconds(), value.getUTCMilliseconds()));
+}
+
+export async function updateTenantSubscription(
+  input: { tenantId: number; action: "select_plan" | "activate" | "suspend" | "renew" | "set_auto_renew"; planKey?: string; autoRenew?: boolean },
+  actorUserId: number,
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const now = new Date();
+  return db.transaction(async (tx) => {
+    const tenant = (await tx.select({ id: tenants.id, status: tenants.status }).from(tenants)
+      .where(eq(tenants.id, input.tenantId)).for("update").limit(1))[0];
+    if (!tenant) throw new Error("الشركة غير موجودة");
+
+    let subscription = (await tx.select().from(tenantSubscriptions)
+      .where(eq(tenantSubscriptions.tenantId, input.tenantId)).for("update").limit(1))[0];
+
+    if (input.action === "select_plan") {
+      if (!input.planKey) throw new Error("اختر باقة صحيحة");
+      const plan = (await tx.select({ id: subscriptionPlans.id, staffLimit: subscriptionPlans.staffLimit }).from(subscriptionPlans)
+        .where(and(eq(subscriptionPlans.planKey, input.planKey), eq(subscriptionPlans.active, 1))).limit(1))[0];
+      if (!plan) throw new Error("الباقة غير موجودة أو غير متاحة");
+      const [activeStaffCount] = await tx.select({ total: count() }).from(staff)
+        .where(and(eq(staff.tenantId, input.tenantId), eq(staff.active, 1)));
+      if (Number(activeStaffCount?.total ?? 0) > plan.staffLimit) {
+        throw new Error(`لا يمكن اختيار هذه الباقة؛ لدى الصالون ${activeStaffCount.total} موظفين نشطين والباقة تسمح بـ ${plan.staffLimit} فقط.`);
+      }
+      if (subscription) {
+        await tx.update(tenantSubscriptions).set({ planId: plan.id }).where(eq(tenantSubscriptions.id, subscription.id));
+      } else {
+        await tx.insert(tenantSubscriptions).values({ tenantId: input.tenantId, planId: plan.id, status: "pending", graceDays: 21 });
+      }
+    } else if (input.action === "set_auto_renew") {
+      if (!subscription) throw new Error("يجب اختيار باقة أولاً");
+      await tx.update(tenantSubscriptions).set({ autoRenew: input.autoRenew ? 1 : 0 }).where(eq(tenantSubscriptions.id, subscription.id));
+    } else if (input.action === "suspend") {
+      await tx.update(tenants).set({ status: "suspended" }).where(eq(tenants.id, input.tenantId));
+      if (subscription) await tx.update(tenantSubscriptions).set({ status: "suspended" }).where(eq(tenantSubscriptions.id, subscription.id));
+    } else {
+      if (!subscription?.planId) throw new Error("اختر باقة قبل تشغيل الاشتراك أو تجديده");
+      const selectedPlan = (await tx.select({ staffLimit: subscriptionPlans.staffLimit }).from(subscriptionPlans)
+        .where(eq(subscriptionPlans.id, subscription.planId)).limit(1))[0];
+      if (!selectedPlan) throw new Error("تعذر العثور على الباقة المحددة");
+      const [activeStaffCount] = await tx.select({ total: count() }).from(staff)
+        .where(and(eq(staff.tenantId, input.tenantId), eq(staff.active, 1)));
+      if (Number(activeStaffCount?.total ?? 0) > selectedPlan.staffLimit) {
+        throw new Error(`لا يمكن تشغيل الاشتراك؛ لدى الصالون ${activeStaffCount.total} موظفين نشطين والباقة تسمح بـ ${selectedPlan.staffLimit} فقط.`);
+      }
+      if (input.action === "activate") {
+        const existingEnd = subscription.currentPeriodEnd;
+        const stillPaidThrough = existingEnd && existingEnd.getTime() > now.getTime();
+        const start = stillPaidThrough ? subscription.currentPeriodStart ?? now : now;
+        const end = stillPaidThrough ? existingEnd : addCalendarMonth(now);
+        const graceEnd = new Date(end.getTime() + (subscription.graceDays ?? 21) * 86400000);
+        await tx.update(tenantSubscriptions).set({
+          status: "active", currentPeriodStart: start, currentPeriodEnd: end, gracePeriodEndsAt: graceEnd,
+        }).where(eq(tenantSubscriptions.id, subscription.id));
+      } else if (input.action === "renew") {
+        const endBeforeRenewal = subscription.currentPeriodEnd;
+        const start = endBeforeRenewal && endBeforeRenewal.getTime() > now.getTime() ? endBeforeRenewal : now;
+        const end = addCalendarMonth(start);
+        const graceEnd = new Date(end.getTime() + (subscription.graceDays ?? 21) * 86400000);
+        await tx.update(tenantSubscriptions).set({
+          status: "active", currentPeriodStart: subscription.currentPeriodStart ?? now,
+          currentPeriodEnd: end, gracePeriodEndsAt: graceEnd,
+        }).where(eq(tenantSubscriptions.id, subscription.id));
+      }
+      await tx.update(tenants).set({ status: "active" }).where(eq(tenants.id, input.tenantId));
+    }
+
+    const details = JSON.stringify({
+      action: input.action,
+      planKey: input.planKey ?? null,
+      autoRenew: input.autoRenew ?? null,
+    });
+    await tx.insert(subscriptionEvents).values({
+      tenantId: input.tenantId,
+      actorUserId,
+      action: `subscription.${input.action}`,
+      details,
+    });
+    return { success: true as const };
+  });
+}
+
+export async function listTenants() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: tenants.id,
+    name: tenants.name,
+    slug: tenants.slug,
+    city: tenants.city,
+    countryCode: tenants.countryCode,
+    currency: tenants.currency,
+    status: tenants.status,
+    createdAt: tenants.createdAt,
+    planKey: subscriptionPlans.planKey,
+    staffLimit: subscriptionPlans.staffLimit,
+    monthlyPriceCents: subscriptionPlans.monthlyPriceCents,
+    planCurrency: subscriptionPlans.currency,
+    subscriptionStatus: tenantSubscriptions.status,
+    currentPeriodStart: tenantSubscriptions.currentPeriodStart,
+    currentPeriodEnd: tenantSubscriptions.currentPeriodEnd,
+    gracePeriodEndsAt: tenantSubscriptions.gracePeriodEndsAt,
+    graceDays: tenantSubscriptions.graceDays,
+    autoRenew: tenantSubscriptions.autoRenew,
+  }).from(tenants)
+    .leftJoin(tenantSubscriptions, eq(tenantSubscriptions.tenantId, tenants.id))
+    .leftJoin(subscriptionPlans, eq(subscriptionPlans.id, tenantSubscriptions.planId))
+    .orderBy(desc(tenants.createdAt));
+}
 export async function setTenantStatus(tenantId:number,status:"active"|"trial"|"suspended",actorUserId:number) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(tenants).set({status}).where(eq(tenants.id,tenantId)); await db.insert(auditLogs).values({tenantId,actorUserId,action:`tenant.${status}`,entity:"tenant",entityId:tenantId}); return (await db.select().from(tenants).where(eq(tenants.id,tenantId)).limit(1))[0]; }
 export async function createTenantForUser(userId: number, input: {name:string; slug:string; city?:string; currency?:string}) {
   const db = await getDb(); if (!db) throw new Error("Database is not available");
@@ -103,9 +282,11 @@ export async function createTenantForUser(userId: number, input: {name:string; s
       // Serialize workspace creation per account, then allow only the first owner workspace.
       const account = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update").limit(1);
       if (!account[0]) throw new Error("الحساب غير موجود");
-      const ownedWorkspace = await tx.select({ id: tenantMembers.id }).from(tenantMembers)
-        .where(and(eq(tenantMembers.userId, userId), eq(tenantMembers.role, "owner"))).limit(1);
-      if (ownedWorkspace[0]) throw new Error("هذا الحساب لديه شركة بالفعل");
+      const existingMembership = await tx.select({ id: tenantMembers.id }).from(tenantMembers)
+        .where(eq(tenantMembers.userId, userId)).limit(1);
+      if (existingMembership[0]) {
+        throw new Error("هذا الحساب مرتبط بشركة بالفعل؛ لا يمكنه إنشاء شركة جديدة من حساب الموظف أو المدير");
+      }
       const existing = await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.slug, input.slug)).limit(1);
       if (existing[0]) throw new Error("رابط الشركة مستخدم بالفعل، اختر اسماً آخر");
       const tenantResult = await tx.insert(tenants).values({name:input.name.trim(), slug:input.slug, city:input.city?.trim() || null, currency:input.currency ?? "ر.ع", status:"trial"});
@@ -718,8 +899,48 @@ export async function listTenantServices(tenantId:number) { const db=await getDb
 export async function createTenantService(tenantId:number,input:{name:string;category:string;durationMinutes:number;price:number}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); if(!input.name.trim()||input.name.trim().length>160) throw new Error("اسم الخدمة غير صحيح"); if(!Number.isInteger(input.durationMinutes)||input.durationMinutes<5||input.durationMinutes>480) throw new Error("مدة الخدمة يجب أن تكون بين 5 و480 دقيقة"); if(!Number.isInteger(input.price)||input.price<0) throw new Error("سعر الخدمة غير صحيح"); const result=await db.insert(services).values({tenantId,name:input.name.trim(),category:input.category.trim()||"عام",durationMinutes:input.durationMinutes,price:input.price,active:1}); const id=Number(result[0].insertId); return (await db.select().from(services).where(and(eq(services.id,id),eq(services.tenantId,tenantId))).limit(1))[0]; }
 export async function updateTenantService(tenantId:number,serviceId:number,input:{name?:string;category?:string;durationMinutes?:number;price?:number;active?:boolean}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); if(input.name!==undefined&&!input.name.trim()) throw new Error("اسم الخدمة لا يمكن أن يكون فارغاً"); if(input.durationMinutes!==undefined&&(!Number.isInteger(input.durationMinutes)||input.durationMinutes<5||input.durationMinutes>480)) throw new Error("مدة الخدمة يجب أن تكون بين 5 و480 دقيقة"); if(input.price!==undefined&&(!Number.isInteger(input.price)||input.price<0)) throw new Error("سعر الخدمة غير صحيح"); const existing=(await db.select({id:services.id}).from(services).where(and(eq(services.id,serviceId),eq(services.tenantId,tenantId))).limit(1))[0]; if(!existing) throw new Error("الخدمة غير موجودة في هذه الشركة"); const {active,...fields}=input; await db.update(services).set({...fields,name:fields.name?.trim(),category:fields.category?.trim(),active:active===undefined?undefined:(active?1:0)}).where(and(eq(services.id,serviceId),eq(services.tenantId,tenantId))); return (await db.select().from(services).where(and(eq(services.id,serviceId),eq(services.tenantId,tenantId))).limit(1))[0]; }
 export async function listTenantStaff(tenantId:number) { const db=await getDb(); return db ? db.select().from(staff).where(and(eq(staff.tenantId,tenantId),eq(staff.active,1))).orderBy(staff.id) : []; }
-export async function addStaff(tenantId:number,input:{name:string;role:string;photoUrl?:string;bio?:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(staff).values({tenantId,name:input.name,role:input.role,photoUrl:input.photoUrl||null,bio:input.bio||null}); return (await db.select().from(staff).where(and(eq(staff.id,Number(result[0].insertId)),eq(staff.tenantId,tenantId))).limit(1))[0]; }
-export async function updateStaff(tenantId:number,staffId:number,input:{name?:string;role?:string;photoUrl?:string|null;bio?:string|null;active?:boolean}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(staff).set({...input,active:input.active===undefined?undefined:(input.active?1:0)}).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))); return (await db.select().from(staff).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))).limit(1))[0]; }
+export async function addStaff(tenantId:number,input:{name:string;role:string;photoUrl?:string;bio?:string}) {
+  const db=await getDb();
+  if(!db) throw new Error("Database is not available");
+  return db.transaction(async tx => {
+    const tenant=(await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.id,tenantId)).for("update").limit(1))[0];
+    if(!tenant) throw new Error("الشركة غير موجودة");
+    const subscription=(await tx.select({status:tenantSubscriptions.status,staffLimit:subscriptionPlans.staffLimit})
+      .from(tenantSubscriptions).innerJoin(subscriptionPlans,eq(tenantSubscriptions.planId,subscriptionPlans.id))
+      .where(and(eq(tenantSubscriptions.tenantId,tenantId),inArray(tenantSubscriptions.status,["active","past_due"]))).limit(1))[0];
+    if(subscription) {
+      const [staffCount]=await tx.select({total:count()}).from(staff).where(and(eq(staff.tenantId,tenantId),eq(staff.active,1)));
+      if(Number(staffCount?.total ?? 0)>=subscription.staffLimit) {
+        throw new Error(`وصلت إلى الحد الأقصى للموظفين في باقة شركتك (${subscription.staffLimit}). قم بترقية الباقة لإضافة موظفين.`);
+      }
+    }
+    const result=await tx.insert(staff).values({tenantId,name:input.name,role:input.role,photoUrl:input.photoUrl||null,bio:input.bio||null});
+    return (await tx.select().from(staff).where(and(eq(staff.id,Number(result[0].insertId)),eq(staff.tenantId,tenantId))).limit(1))[0];
+  });
+}
+export async function updateStaff(tenantId:number,staffId:number,input:{name?:string;role?:string;photoUrl?:string|null;bio?:string|null;active?:boolean}) {
+  const db=await getDb(); if(!db) throw new Error("Database is not available");
+  return db.transaction(async tx => {
+    const tenant=(await tx.select({id:tenants.id}).from(tenants).where(eq(tenants.id,tenantId)).for("update").limit(1))[0];
+    if(!tenant) throw new Error("الشركة غير موجودة");
+    const existing=(await tx.select({id:staff.id,active:staff.active}).from(staff).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))).limit(1))[0];
+    if(!existing) throw new Error("الموظف غير موجود");
+    if(input.active===true && existing.active!==1) {
+      const subscription=(await tx.select({staffLimit:subscriptionPlans.staffLimit})
+        .from(tenantSubscriptions).innerJoin(subscriptionPlans,eq(tenantSubscriptions.planId,subscriptionPlans.id))
+        .where(and(eq(tenantSubscriptions.tenantId,tenantId),inArray(tenantSubscriptions.status,["active","past_due"]))).limit(1))[0];
+      if(subscription) {
+        const [staffCount]=await tx.select({total:count()}).from(staff).where(and(eq(staff.tenantId,tenantId),eq(staff.active,1)));
+        if(Number(staffCount?.total ?? 0)>=subscription.staffLimit) {
+          throw new Error(`وصلت إلى الحد الأقصى للموظفين في باقة شركتك (${subscription.staffLimit}). قم بترقية الباقة لإضافة موظفين.`);
+        }
+      }
+    }
+    const {active,...fields}=input;
+    await tx.update(staff).set({...fields,active:active===undefined?undefined:(active?1:0)}).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId)));
+    return (await tx.select().from(staff).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))).limit(1))[0];
+  });
+}
 export async function listStaffInvites(tenantId:number) { const db=await getDb(); return db ? db.select().from(staffInvites).where(eq(staffInvites.tenantId,tenantId)).orderBy(desc(staffInvites.createdAt)) : []; }
 export async function createStaffInvite(tenantId:number,createdByUserId:number,input:{email?:string;staffId:number;role?:"staff"|"manager"}) {
   const db=await getDb();

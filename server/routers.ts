@@ -3,8 +3,9 @@ import { bookingDateSchema } from "./validation";
 import { TRPCError } from "@trpc/server";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, protectedProcedure, publicProcedure, router, loginProcedure, registrationProcedure, passwordResetProcedure, publicBookingReadProcedure, publicBookingCreateProcedure, publicReviewProcedure } from "./_core/trpc";
-import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, createTelegramLinkCode, getTenantAccessContext, listUserTenantMemberships, listEmployeeBookings, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, updateUserLanguage, userCanManageTenant } from "./db";
-import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, sessionForUser } from "./localAuth";
+import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, createTelegramLinkCode, getTenantAccessContext, listUserTenantMemberships, listEmployeeBookings, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, listSubscriptionPlans, updateTenantSubscription, publishBookingReview, saveStaffHours, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, updateUserLanguage, userCanManageTenant } from "./db";
+import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, sessionForUser, sendEmailVerification, verifyEmailToken, resendEmailVerification } from "./localAuth";
+import { listPlatformAdminAuditLogs, setPlatformAdminRole } from "./platformAdmin";
 
 export const appRouter = router({
   system: router({ health: publicProcedure.query(() => ({ ok: true })) }),
@@ -12,13 +13,36 @@ export const appRouter = router({
     me: publicProcedure.query(({ ctx }) => { if (!ctx.user) return null; const { passwordHash: _passwordHash, ...safeUser } = ctx.user; return safeUser; }),
     setLanguage: protectedProcedure.input(z.object({language:z.enum(["ar","en","ru"])})).mutation(({ctx,input}) => updateUserLanguage(ctx.user.id,input.language)),
     logout: publicProcedure.mutation(({ ctx }) => { ctx.res.clearCookie(localSessionCookie, { ...getSessionCookieOptions(ctx.req), maxAge: 0 }); return { success: true } as const; }),
-    register: registrationProcedure.input(z.object({name:z.string().min(2).max(160),email:z.string().email(),password:z.string().min(8).max(128),inviteCode:z.string().min(20).max(64).optional()})).mutation(async ({ctx,input}) => { try { const user=await registerLocalUser(input); ctx.res.cookie(localSessionCookie,sessionForUser(user),{...getSessionCookieOptions(ctx.req),maxAge:30*24*60*60*1000}); const {passwordHash: _passwordHash, ...safeUser}=user; return safeUser; } catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر إنشاء الحساب"}); } }),
+    register: registrationProcedure.input(z.object({name:z.string().min(2).max(160),email:z.string().email(),password:z.string().min(8).max(128),inviteCode:z.string().min(20).max(64).optional()})).mutation(async ({input}) => { try { const user=await registerLocalUser(input); await sendEmailVerification(user.id,user.email!); return { verificationRequired: true as const, email: user.email }; } catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر إنشاء الحساب أو إرسال رسالة التفعيل"}); } }),
     login: loginProcedure.input(z.object({email:z.string().email(),password:z.string().min(1).max(128),remember:z.boolean().default(true)})).mutation(async ({ctx,input}) => { try { const user=await loginLocalUser(input.email,input.password); const maxAge=input.remember?30*24*60*60*1000:12*60*60*1000; ctx.res.cookie(localSessionCookie,sessionForUser(user,input.remember),{...getSessionCookieOptions(ctx.req),maxAge}); const {passwordHash: _passwordHash, ...safeUser}=user; return safeUser; } catch(error) { throw new TRPCError({code:"UNAUTHORIZED",message:error instanceof Error?error.message:"تعذر تسجيل الدخول"}); } }),
     forgotPassword: passwordResetProcedure.input(z.object({email:z.string().email()})).mutation(({input}) => requestPasswordReset(input.email)),
+    verifyEmail: publicProcedure.input(z.object({token:z.string().min(64).max(64)})).mutation(({input}) => verifyEmailToken(input.token)),
+    resendVerification: registrationProcedure.input(z.object({email:z.string().email()})).mutation(({input}) => resendEmailVerification(input.email)),
     resetPassword: passwordResetProcedure.input(z.object({token:z.string().min(20),password:z.string().min(8).max(128)})).mutation(async ({input}) => { try { return await resetPassword(input.token,input.password); } catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر تغيير كلمة المرور"}); } }),
   }),
   platform: router({
     tenants: adminProcedure.query(() => listTenants()),
+    subscriptionPlans: adminProcedure.query(() => listSubscriptionPlans()),
+    subscriptionAction: adminProcedure
+      .input(z.object({
+        tenantId: z.number().int().positive(),
+        action: z.enum(["select_plan", "activate", "suspend", "renew", "set_auto_renew"]),
+        planKey: z.string().max(16).optional(),
+        autoRenew: z.boolean().optional(),
+      }))
+      .mutation(({ ctx, input }) => updateTenantSubscription(input, ctx.user.id)),
+    adminAuditLogs: adminProcedure.query(() => listPlatformAdminAuditLogs()),
+    setSuperAdminRole: adminProcedure
+      .input(z.object({
+        userId: z.number().int().positive(),
+        enabled: z.boolean(),
+        reason: z.string().max(500).optional(),
+      }))
+      .mutation(({ ctx, input }) => setPlatformAdminRole(ctx.user.id, input.userId, input.enabled, {
+        reason: input.reason,
+        ip: ctx.req.ip || ctx.req.socket.remoteAddress,
+        userAgent: ctx.req.get("user-agent"),
+      })),
   }),
   publicBooking: router({
     catalog: publicBookingReadProcedure.input(z.object({ slug: z.string().min(2) })).query(({ input }) => getPublicBookingCatalog(input.slug)),
