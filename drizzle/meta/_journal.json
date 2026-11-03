@@ -127,6 +127,13 @@
       "when": 1793710800000,
       "tag": "0020_correct_solo_plan_price",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1793711400000,
+      "tag": "0021_restore_solo_five_usd",
+      "breakpoints": true
     }
   ]
 }
