@@ -1,7 +1,7 @@
-import { and, desc, eq, gte, isNull, lte, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lte, ne } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users, subscriptionPlans, tenantSubscriptions } from "../drizzle/schema";
+import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users, subscriptionPlans, tenantSubscriptions, subscriptionEvents } from "../drizzle/schema";
 import { buildBookingDemand } from './bookingDemand';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -93,6 +93,96 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result[0];
 }
+
+export async function listSubscriptionPlans() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    planKey: subscriptionPlans.planKey,
+    staffLimit: subscriptionPlans.staffLimit,
+    monthlyPriceCents: subscriptionPlans.monthlyPriceCents,
+    currency: subscriptionPlans.currency,
+  }).from(subscriptionPlans).where(eq(subscriptionPlans.active, 1)).orderBy(asc(subscriptionPlans.monthlyPriceCents));
+}
+
+function addCalendarMonth(value: Date) {
+  const year = value.getUTCFullYear();
+  const month = value.getUTCMonth() + 1;
+  const day = value.getUTCDate();
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(day, lastDay), value.getUTCHours(), value.getUTCMinutes(), value.getUTCSeconds(), value.getUTCMilliseconds()));
+}
+
+export async function updateTenantSubscription(
+  input: { tenantId: number; action: "select_plan" | "activate" | "suspend" | "renew" | "set_auto_renew"; planKey?: string; autoRenew?: boolean },
+  actorUserId: number,
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const now = new Date();
+  return db.transaction(async (tx) => {
+    const tenant = (await tx.select({ id: tenants.id, status: tenants.status }).from(tenants)
+      .where(eq(tenants.id, input.tenantId)).for("update").limit(1))[0];
+    if (!tenant) throw new Error("الشركة غير موجودة");
+
+    let subscription = (await tx.select().from(tenantSubscriptions)
+      .where(eq(tenantSubscriptions.tenantId, input.tenantId)).for("update").limit(1))[0];
+
+    if (input.action === "select_plan") {
+      if (!input.planKey) throw new Error("اختر باقة صحيحة");
+      const plan = (await tx.select({ id: subscriptionPlans.id }).from(subscriptionPlans)
+        .where(and(eq(subscriptionPlans.planKey, input.planKey), eq(subscriptionPlans.active, 1))).limit(1))[0];
+      if (!plan) throw new Error("الباقة غير موجودة أو غير متاحة");
+      if (subscription) {
+        await tx.update(tenantSubscriptions).set({ planId: plan.id }).where(eq(tenantSubscriptions.id, subscription.id));
+      } else {
+        await tx.insert(tenantSubscriptions).values({ tenantId: input.tenantId, planId: plan.id, status: "pending", graceDays: 21 });
+      }
+    } else if (input.action === "set_auto_renew") {
+      if (!subscription) throw new Error("يجب اختيار باقة أولاً");
+      await tx.update(tenantSubscriptions).set({ autoRenew: input.autoRenew ? 1 : 0 }).where(eq(tenantSubscriptions.id, subscription.id));
+    } else if (input.action === "suspend") {
+      await tx.update(tenants).set({ status: "suspended" }).where(eq(tenants.id, input.tenantId));
+      if (subscription) await tx.update(tenantSubscriptions).set({ status: "suspended" }).where(eq(tenantSubscriptions.id, subscription.id));
+    } else {
+      if (!subscription?.planId) throw new Error("اختر باقة قبل تشغيل الاشتراك أو تجديده");
+      if (input.action === "activate") {
+        const existingEnd = subscription.currentPeriodEnd;
+        const stillPaidThrough = existingEnd && existingEnd.getTime() > now.getTime();
+        const start = stillPaidThrough ? subscription.currentPeriodStart ?? now : now;
+        const end = stillPaidThrough ? existingEnd : addCalendarMonth(now);
+        const graceEnd = new Date(end.getTime() + (subscription.graceDays ?? 21) * 86400000);
+        await tx.update(tenantSubscriptions).set({
+          status: "active", currentPeriodStart: start, currentPeriodEnd: end, gracePeriodEndsAt: graceEnd,
+        }).where(eq(tenantSubscriptions.id, subscription.id));
+      } else if (input.action === "renew") {
+        const endBeforeRenewal = subscription.currentPeriodEnd;
+        const start = endBeforeRenewal && endBeforeRenewal.getTime() > now.getTime() ? endBeforeRenewal : now;
+        const end = addCalendarMonth(start);
+        const graceEnd = new Date(end.getTime() + (subscription.graceDays ?? 21) * 86400000);
+        await tx.update(tenantSubscriptions).set({
+          status: "active", currentPeriodStart: subscription.currentPeriodStart ?? now,
+          currentPeriodEnd: end, gracePeriodEndsAt: graceEnd,
+        }).where(eq(tenantSubscriptions.id, subscription.id));
+      }
+      await tx.update(tenants).set({ status: "active" }).where(eq(tenants.id, input.tenantId));
+    }
+
+    const details = JSON.stringify({
+      action: input.action,
+      planKey: input.planKey ?? null,
+      autoRenew: input.autoRenew ?? null,
+    });
+    await tx.insert(subscriptionEvents).values({
+      tenantId: input.tenantId,
+      actorUserId,
+      action: `subscription.${input.action}`,
+      details,
+    });
+    return { success: true as const };
+  });
+}
+
 export async function listTenants() {
   const db = await getDb();
   if (!db) return [];

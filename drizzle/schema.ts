@@ -32,7 +32,7 @@ export const tenantSubscriptions = mysqlTable("tenantSubscriptions", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").notNull(),
   planId: int("planId"),
-  status: mysqlEnum("status", ["active", "past_due", "suspended", "cancelled"]).default("active").notNull(),
+  status: mysqlEnum("status", ["pending", "active", "past_due", "suspended", "cancelled"]).default("pending").notNull(),
   currentPeriodStart: timestamp("currentPeriodStart"),
   currentPeriodEnd: timestamp("currentPeriodEnd"),
   gracePeriodEndsAt: timestamp("gracePeriodEndsAt"),

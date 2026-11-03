@@ -3,7 +3,7 @@ import { bookingDateSchema } from "./validation";
 import { TRPCError } from "@trpc/server";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, protectedProcedure, publicProcedure, router, loginProcedure, registrationProcedure, passwordResetProcedure, publicBookingReadProcedure, publicBookingCreateProcedure, publicReviewProcedure } from "./_core/trpc";
-import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, createTelegramLinkCode, getTenantAccessContext, listUserTenantMemberships, listEmployeeBookings, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, updateUserLanguage, userCanManageTenant } from "./db";
+import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, createTelegramLinkCode, getTenantAccessContext, listUserTenantMemberships, listEmployeeBookings, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, listSubscriptionPlans, updateTenantSubscription, publishBookingReview, saveStaffHours, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, updateUserLanguage, userCanManageTenant } from "./db";
 import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, sessionForUser, sendEmailVerification, verifyEmailToken, resendEmailVerification } from "./localAuth";
 import { listPlatformAdminAuditLogs, setPlatformAdminRole } from "./platformAdmin";
 
@@ -22,6 +22,15 @@ export const appRouter = router({
   }),
   platform: router({
     tenants: adminProcedure.query(() => listTenants()),
+    subscriptionPlans: adminProcedure.query(() => listSubscriptionPlans()),
+    subscriptionAction: adminProcedure
+      .input(z.object({
+        tenantId: z.number().int().positive(),
+        action: z.enum(["select_plan", "activate", "suspend", "renew", "set_auto_renew"]),
+        planKey: z.string().max(16).optional(),
+        autoRenew: z.boolean().optional(),
+      }))
+      .mutation(({ ctx, input }) => updateTenantSubscription(input, ctx.user.id)),
     adminAuditLogs: adminProcedure.query(() => listPlatformAdminAuditLogs()),
     setSuperAdminRole: adminProcedure
       .input(z.object({
