@@ -3,7 +3,7 @@ import { bookingDateSchema } from "./validation";
 import { TRPCError } from "@trpc/server";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, protectedProcedure, publicProcedure, router, loginProcedure, registrationProcedure, passwordResetProcedure, publicBookingReadProcedure, publicBookingCreateProcedure, publicReviewProcedure } from "./_core/trpc";
-import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, createTelegramLinkCode, getTenantAccessContext, listEmployeeBookings, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, setTenantStatus, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, updateUserLanguage, userCanManageTenant } from "./db";
+import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, createTelegramLinkCode, getTenantAccessContext, listUserTenantMemberships, listEmployeeBookings, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, updateUserLanguage, userCanManageTenant } from "./db";
 import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, sessionForUser } from "./localAuth";
 
 export const appRouter = router({
@@ -19,7 +19,6 @@ export const appRouter = router({
   }),
   platform: router({
     tenants: adminProcedure.query(() => listTenants()),
-    setTenantStatus: adminProcedure.input(z.object({tenantId:z.number(),status:z.enum(["active","trial","suspended"])})).mutation(({ctx,input}) => setTenantStatus(input.tenantId,input.status,ctx.user.id)),
   }),
   publicBooking: router({
     catalog: publicBookingReadProcedure.input(z.object({ slug: z.string().min(2) })).query(({ input }) => getPublicBookingCatalog(input.slug)),
@@ -34,11 +33,12 @@ export const appRouter = router({
     }),
   }),
   workspace: router({
-    current: protectedProcedure.query(({ ctx }) => getTenantForUser(ctx.user)),
+    memberships: protectedProcedure.query(({ctx}) => listUserTenantMemberships(ctx.user)),
+    current: protectedProcedure.input(z.object({tenantId:z.number().int().positive().optional()}).optional()).query(({ ctx, input }) => getTenantForUser(ctx.user,input?.tenantId)),
     createTelegramLinkCode: protectedProcedure.mutation(({ ctx }) => createTelegramLinkCode(ctx.user.id)),
-    accessContext: protectedProcedure.query(({ctx}) => getTenantAccessContext(ctx.user)),
+    accessContext: protectedProcedure.input(z.object({tenantId:z.number().int().positive().optional()}).optional()).query(({ctx,input}) => getTenantAccessContext(ctx.user,input?.tenantId)),
     employeeBookings: protectedProcedure.input(z.object({tenantId:z.number().int().positive(),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),endDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()}).refine(value=>!value.endDate||value.endDate>=value.date,{message:"نهاية الفترة يجب ألا تسبق بدايتها"}).refine(value=>!value.endDate||(Date.parse(value.endDate+"T00:00:00Z")-Date.parse(value.date+"T00:00:00Z"))<=6*86400000,{message:"الفترة القصوى سبعة أيام"})).query(async ({ctx,input}) => {
-      const access = await getTenantAccessContext(ctx.user);
+      const access = await getTenantAccessContext(ctx.user,input.tenantId);
       if (!access || access.tenantId !== input.tenantId || access.role !== "staff" || !access.staffId)
         throw new TRPCError({code:"FORBIDDEN",message:"حساب الموظف غير مرتبط بملف موظف نشط في هذه الشركة"});
       return listEmployeeBookings(input.tenantId,access.staffId,input.date,input.endDate);
@@ -50,6 +50,7 @@ export const appRouter = router({
       catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر اقتراح المواعيد المناسبة"}); }
     }),
     createTenant: protectedProcedure.input(z.object({name:z.string().min(2).max(160), slug:z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).min(2).max(120), city:z.string().max(120).optional(), currency:z.string().max(12).optional()})).mutation(async ({ctx,input}) => {
+      if (ctx.user.role === "admin") throw new TRPCError({code:"FORBIDDEN",message:"إدارة المنصة للعرض فقط ولا يمكنها إنشاء شركات من هذا الحساب"});
       try { return await createTenantForUser(ctx.user.id, input); } catch (error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error ? error.message : "تعذر إنشاء مساحة الشركة"}); }
     }),
     updateSettings: protectedProcedure.input(z.object({tenantId:z.number(),countryCode:z.string().length(2).optional(),currency:z.string().max(12).optional(),timezone:z.string().max(64).optional(),defaultLanguage:z.enum(["ar","en","ru"]).optional()})).mutation(async ({ctx,input}) => { if (!(await userCanManageTenant(ctx.user,input.tenantId))) throw new TRPCError({code:"FORBIDDEN",message:"لا تملك صلاحية الوصول إلى هذه الشركة"}); const {tenantId,...settings}=input; return updateTenantSettings(tenantId,settings); }),
