@@ -155,7 +155,8 @@ export default function Home() {
   const removeNav = (id:string) => { setNavItems(items => items.filter(item => item.id !== id)); notify(t("تم إخفاء القسم من القائمة")); };
   const resetNav = () => { setNavItems(navDefaults); notify(t("تمت استعادة جميع الأقسام")); };
 
-  if (workspaceQuery.isSuccess && !workspaceQuery.data) return <FirstWorkspaceSetup />;
+  if (!isPlatformAdmin && workspaceQuery.isSuccess && !workspaceQuery.data) return <FirstWorkspaceSetup />;
+  if (workspaceQuery.isError) return <main className="min-h-screen flex items-center justify-center p-6"><section className="w-full max-w-md rounded-xl border p-6 text-center space-y-4"><h1 className="text-xl font-semibold">{language === "ar" ? "تعذر تحميل مساحة العمل" : language === "ru" ? "Не удалось загрузить рабочее пространство" : "Could not load your workspace"}</h1><p>{language === "ar" ? "تحقق من اتصال الإنترنت ثم حاول مرة أخرى." : language === "ru" ? "Проверьте подключение к интернету и попробуйте снова." : "Check your internet connection and try again."}</p><button className="rounded-lg px-4 py-2 font-medium" onClick={() => workspaceQuery.refetch()}>{language === "ar" ? "إعادة المحاولة" : language === "ru" ? "Повторить" : "Retry"}</button></section></main>;
 
   return <div className={`app-shell ${compact ? "compact" : ""}`} style={{"--brand":accent} as React.CSSProperties}>
     <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
