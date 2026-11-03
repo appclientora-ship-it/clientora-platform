@@ -355,7 +355,7 @@ export async function updateBookingForTenant(tenantId:number, bookingId:number, 
   const action = patch.status === "cancelled" ? "booking.cancelled" : patch.status === "completed" ? "booking.completed" : patch.paid ? "booking.paid" : "booking.updated";
   await tx.insert(auditLogs).values({tenantId,actorUserId,action,entity:"booking",entityId:bookingId});
   await tx.insert(notifications).values({tenantId,recipientStaffId:nextStaffId,type:action,title:action === "booking.cancelled" ? "تم إلغاء حجز" : action === "booking.completed" ? "اكتملت الخدمة" : "تحديث على حجز",body:`تم تحديث حجز العميل رقم ${bookingId}.`,entity:"booking",entityId:bookingId});
-  return (await tx.select().from(bookings).where(eq(bookings.id,bookingId)).limit(1))[0];
+  return (await tx.select().from(bookings).where(and(eq(bookings.id,bookingId),eq(bookings.tenantId,tenantId))).limit(1))[0];
   });
 }
 export async function listNotifications(tenantId:number) {
@@ -384,27 +384,27 @@ export async function getEmployeeReports(tenantId:number,fromDate:string,toDate:
   return {employees,totals,demand};
 }
 export async function listExpenses(tenantId:number,fromDate:string,toDate:string) { const db=await getDb(); return db ? db.select().from(expenses).where(and(eq(expenses.tenantId,tenantId),gte(expenses.date,fromDate),lte(expenses.date,toDate))).orderBy(desc(expenses.date),desc(expenses.id)) : []; }
-export async function createExpense(tenantId:number,createdBy:number,input:{category:string;description:string;vendor?:string;amount:number;date:string;paymentMethod:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(expenses).values({...input,tenantId,createdBy,vendor:input.vendor || null}); const id=Number(result[0].insertId); await db.insert(auditLogs).values({tenantId,actorUserId:createdBy,action:"expense.created",entity:"expense",entityId:id}); return (await db.select().from(expenses).where(eq(expenses.id,id)).limit(1))[0]; }
+export async function createExpense(tenantId:number,createdBy:number,input:{category:string;description:string;vendor?:string;amount:number;date:string;paymentMethod:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(expenses).values({...input,tenantId,createdBy,vendor:input.vendor || null}); const id=Number(result[0].insertId); await db.insert(auditLogs).values({tenantId,actorUserId:createdBy,action:"expense.created",entity:"expense",entityId:id}); return (await db.select().from(expenses).where(and(eq(expenses.id,id),eq(expenses.tenantId,tenantId))).limit(1))[0]; }
 export async function getTenantForUser(user: User) {
-  const db = await getDb(); if (!db) return undefined;
-  const rows = await db.select({ tenant: tenants }).from(tenantMembers).innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id)).where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(1);
-  if (rows[0]?.tenant) return rows[0].tenant;
-  if (user.role === "admin") return (await db.select().from(tenants).orderBy(desc(tenants.createdAt)).limit(1))[0];
-  return undefined;
+  const db = await getDb(); if (!db || user.role === "admin") return undefined;
+  // Platform admins use platform-only procedures. For other users, never
+  // silently choose a workspace when multiple active memberships exist.
+  const rows = await db.select({ tenant: tenants }).from(tenantMembers)
+    .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
+    .where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(2);
+  return rows.length === 1 ? rows[0].tenant : undefined;
 }
 export async function getTenantAccessContext(user: User) {
   const db = await getDb(); if (!db) return undefined;
-  if (user.role === "admin") {
-    const tenant = await getTenantForUser(user);
-    return tenant ? { tenantId: tenant.id, role: "owner" as const, staffId: null } : undefined;
-  }
+  // Platform administration is handled by platform-only procedures. Tenant
+  // access always requires an explicit membership in exactly one workspace.
   const rows = await db.select({ tenant: tenants, role: tenantMembers.role, staffId: staff.id })
     .from(tenantMembers)
     .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
     .leftJoin(staff, and(eq(staff.tenantId, tenantMembers.tenantId), eq(staff.userId, user.id), eq(staff.active, 1)))
-    .where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(1);
+    .where(and(eq(tenantMembers.userId, user.id), ne(tenants.status, "suspended"))).limit(2);
+  if (rows.length !== 1) return undefined;
   const row = rows[0];
-  if (!row) return undefined;
   return { tenantId: row.tenant.id, role: row.role, staffId: row.staffId ?? null };
 }
 export async function listEmployeeBookings(tenantId:number, staffId:number, date:string, endDate?:string) {
@@ -420,7 +420,6 @@ export async function listEmployeeBookings(tenantId:number, staffId:number, date
     clientName:row.client.name,serviceName:row.service.name}));
 }
 export async function userCanAccessTenant(user: User, tenantId: number) {
-  if (user.role === "admin") return true;
   const db = await getDb(); if (!db) return false;
   const rows = await db.select({ id: tenantMembers.id }).from(tenantMembers)
     .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
@@ -428,7 +427,6 @@ export async function userCanAccessTenant(user: User, tenantId: number) {
   return rows.length > 0;
 }
 export async function userCanManageTenant(user: User, tenantId: number) {
-  if (user.role === "admin") return true;
   const db = await getDb(); if (!db) return false;
   const rows = await db.select({ role: tenantMembers.role }).from(tenantMembers)
     .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
@@ -703,21 +701,41 @@ export async function createBookingReview(input:{tenantId:number;bookingId:numbe
   if(!booking || booking.status!=="completed") throw new Error("يمكن تقييم الحجز بعد اكتمال الخدمة فقط");
   const client=(await db.select().from(clients).where(and(eq(clients.id,booking.clientId),eq(clients.tenantId,input.tenantId))).limit(1))[0];
   if(!client || client.phone !== input.phone) throw new Error("رقم الهاتف لا يطابق بيانات الحجز");
-  const existing=(await db.select().from(bookingReviews).where(eq(bookingReviews.bookingId,input.bookingId)).limit(1))[0]; if(existing) throw new Error("تم تقييم هذا الحجز من قبل");
+  const existing=(await db.select().from(bookingReviews).where(and(eq(bookingReviews.bookingId,input.bookingId),eq(bookingReviews.tenantId,input.tenantId))).limit(1))[0]; if(existing) throw new Error("تم تقييم هذا الحجز من قبل");
   await db.insert(bookingReviews).values({tenantId:input.tenantId,bookingId:booking.id,clientId:booking.clientId,staffId:booking.staffId,rating:input.rating,comment:input.comment||null,published:0});
   return { success: true };
 }
 export async function listBookingReviews(tenantId:number) { const db=await getDb(); return db ? db.select().from(bookingReviews).where(eq(bookingReviews.tenantId,tenantId)).orderBy(desc(bookingReviews.createdAt)) : []; }
-export async function publishBookingReview(tenantId:number,reviewId:number,published:boolean) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(bookingReviews).set({published:published?1:0}).where(and(eq(bookingReviews.id,reviewId),eq(bookingReviews.tenantId,tenantId))); return (await db.select().from(bookingReviews).where(eq(bookingReviews.id,reviewId)).limit(1))[0]; }
+export async function publishBookingReview(tenantId:number,reviewId:number,published:boolean) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(bookingReviews).set({published:published?1:0}).where(and(eq(bookingReviews.id,reviewId),eq(bookingReviews.tenantId,tenantId))); return (await db.select().from(bookingReviews).where(and(eq(bookingReviews.id,reviewId),eq(bookingReviews.tenantId,tenantId))).limit(1))[0]; }
 export async function updateTenantSettings(tenantId:number,input:{countryCode?:string;currency?:string;timezone?:string;defaultLanguage?:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); if (input.timezone !== undefined && !isValidTenantTimeZone(input.timezone)) throw new Error("المنطقة الزمنية غير صحيحة؛ اختر منطقة زمنية معتمدة مثل Asia/Muscat"); await db.update(tenants).set(input).where(eq(tenants.id,tenantId)); return (await db.select().from(tenants).where(eq(tenants.id,tenantId)).limit(1))[0]; }
 export async function listTenantServices(tenantId:number) { const db=await getDb(); return db ? db.select().from(services).where(and(eq(services.tenantId,tenantId),eq(services.active,1))).orderBy(services.id) : []; }
 export async function createTenantService(tenantId:number,input:{name:string;category:string;durationMinutes:number;price:number}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); if(!input.name.trim()||input.name.trim().length>160) throw new Error("اسم الخدمة غير صحيح"); if(!Number.isInteger(input.durationMinutes)||input.durationMinutes<5||input.durationMinutes>480) throw new Error("مدة الخدمة يجب أن تكون بين 5 و480 دقيقة"); if(!Number.isInteger(input.price)||input.price<0) throw new Error("سعر الخدمة غير صحيح"); const result=await db.insert(services).values({tenantId,name:input.name.trim(),category:input.category.trim()||"عام",durationMinutes:input.durationMinutes,price:input.price,active:1}); const id=Number(result[0].insertId); return (await db.select().from(services).where(and(eq(services.id,id),eq(services.tenantId,tenantId))).limit(1))[0]; }
 export async function updateTenantService(tenantId:number,serviceId:number,input:{name?:string;category?:string;durationMinutes?:number;price?:number;active?:boolean}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); if(input.name!==undefined&&!input.name.trim()) throw new Error("اسم الخدمة لا يمكن أن يكون فارغاً"); if(input.durationMinutes!==undefined&&(!Number.isInteger(input.durationMinutes)||input.durationMinutes<5||input.durationMinutes>480)) throw new Error("مدة الخدمة يجب أن تكون بين 5 و480 دقيقة"); if(input.price!==undefined&&(!Number.isInteger(input.price)||input.price<0)) throw new Error("سعر الخدمة غير صحيح"); const existing=(await db.select({id:services.id}).from(services).where(and(eq(services.id,serviceId),eq(services.tenantId,tenantId))).limit(1))[0]; if(!existing) throw new Error("الخدمة غير موجودة في هذه الشركة"); const {active,...fields}=input; await db.update(services).set({...fields,name:fields.name?.trim(),category:fields.category?.trim(),active:active===undefined?undefined:(active?1:0)}).where(and(eq(services.id,serviceId),eq(services.tenantId,tenantId))); return (await db.select().from(services).where(and(eq(services.id,serviceId),eq(services.tenantId,tenantId))).limit(1))[0]; }
 export async function listTenantStaff(tenantId:number) { const db=await getDb(); return db ? db.select().from(staff).where(and(eq(staff.tenantId,tenantId),eq(staff.active,1))).orderBy(staff.id) : []; }
-export async function addStaff(tenantId:number,input:{name:string;role:string;photoUrl?:string;bio?:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(staff).values({tenantId,name:input.name,role:input.role,photoUrl:input.photoUrl||null,bio:input.bio||null}); return (await db.select().from(staff).where(eq(staff.id,Number(result[0].insertId))).limit(1))[0]; }
+export async function addStaff(tenantId:number,input:{name:string;role:string;photoUrl?:string;bio?:string}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const result=await db.insert(staff).values({tenantId,name:input.name,role:input.role,photoUrl:input.photoUrl||null,bio:input.bio||null}); return (await db.select().from(staff).where(and(eq(staff.id,Number(result[0].insertId)),eq(staff.tenantId,tenantId))).limit(1))[0]; }
 export async function updateStaff(tenantId:number,staffId:number,input:{name?:string;role?:string;photoUrl?:string|null;bio?:string|null;active?:boolean}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.update(staff).set({...input,active:input.active===undefined?undefined:(input.active?1:0)}).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))); return (await db.select().from(staff).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))).limit(1))[0]; }
 export async function listStaffInvites(tenantId:number) { const db=await getDb(); return db ? db.select().from(staffInvites).where(eq(staffInvites.tenantId,tenantId)).orderBy(desc(staffInvites.createdAt)) : []; }
-export async function createStaffInvite(tenantId:number,createdByUserId:number,input:{email?:string;staffId:number;role?:"staff"|"manager"}) { const db=await getDb(); if(!db) throw new Error("Database is not available"); const creator=(await db.select({role:tenantMembers.role}).from(tenantMembers).where(and(eq(tenantMembers.tenantId,tenantId),eq(tenantMembers.userId,createdByUserId))).limit(1))[0]; const creatorIsPlatformAdmin=(await db.select({id:users.id}).from(users).where(and(eq(users.id,createdByUserId),eq(users.role,"admin"))).limit(1))[0]; if(!creator && !creatorIsPlatformAdmin) throw new Error("لا تملك صلاحية دعوة موظفين إلى هذه الشركة"); if(input.role==="manager" && creator?.role!=="owner" && !creatorIsPlatformAdmin) throw new Error("ترقية موظف إلى مدير متاحة لمالك الشركة فقط"); const employee=(await db.select({id:staff.id,userId:staff.userId}).from(staff).where(and(eq(staff.id,input.staffId),eq(staff.tenantId,tenantId),eq(staff.active,1))).limit(1))[0]; if(!employee) throw new Error("الموظف غير موجود في هذه الشركة"); if(employee.userId) throw new Error("هذا الموظف لديه حساب بالفعل"); const code=randomBytes(18).toString("hex"); const expiresAt=new Date(Date.now()+7*24*60*60*1000); const result=await db.insert(staffInvites).values({tenantId,createdByUserId,email:input.email?.trim().toLowerCase()||null,staffId:input.staffId,role:input.role||"staff",code,expiresAt}); return (await db.select().from(staffInvites).where(eq(staffInvites.id,Number(result[0].insertId))).limit(1))[0]; }
+export async function createStaffInvite(tenantId:number,createdByUserId:number,input:{email?:string;staffId:number;role?:"staff"|"manager"}) {
+  const db=await getDb();
+  if(!db) throw new Error("Database is not available");
+  const creator=(await db.select({role:tenantMembers.role}).from(tenantMembers)
+    .innerJoin(tenants,eq(tenantMembers.tenantId,tenants.id))
+    .where(and(eq(tenantMembers.tenantId,tenantId),eq(tenantMembers.userId,createdByUserId),ne(tenants.status,"suspended"))).limit(1))[0];
+  if(!creator || (creator.role!=="owner" && creator.role!=="manager")) {
+    throw new Error("لا تملك صلاحية دعوة موظفين إلى هذه الشركة");
+  }
+  if(input.role==="manager" && creator.role!=="owner") {
+    throw new Error("ترقية موظف إلى مدير متاحة لمالك الشركة فقط");
+  }
+  const employee=(await db.select({id:staff.id,userId:staff.userId}).from(staff)
+    .where(and(eq(staff.id,input.staffId),eq(staff.tenantId,tenantId),eq(staff.active,1))).limit(1))[0];
+  if(!employee) throw new Error("الموظف غير موجود في هذه الشركة");
+  if(employee.userId) throw new Error("هذا الموظف لديه حساب بالفعل");
+  const code=randomBytes(18).toString("hex");
+  const expiresAt=new Date(Date.now()+7*24*60*60*1000);
+  const result=await db.insert(staffInvites).values({tenantId,createdByUserId,email:input.email?.trim().toLowerCase()||null,staffId:input.staffId,role:input.role||"staff",code,expiresAt});
+  return (await db.select().from(staffInvites).where(and(eq(staffInvites.id,Number(result[0].insertId)),eq(staffInvites.tenantId,tenantId))).limit(1))[0];
+}
 export async function listStaffTimeOff(tenantId:number,staffId:number) { const db=await getDb(); return db ? db.select().from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenantId),eq(staffTimeOff.staffId,staffId))).orderBy(staffTimeOff.date) : []; }
 export async function addStaffTimeOff(tenantId:number,staffId:number,date:string,reason?:string) { const db=await getDb(); if(!db) throw new Error("Database is not available"); if (!isValidBookingDate(date)) throw new Error("تاريخ الإجازة غير صحيح"); const member=await db.select({id:staff.id}).from(staff).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))).limit(1); if(!member[0]) throw new Error("Сотрудник не найден"); const existing=await db.select({id:staffTimeOff.id}).from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenantId),eq(staffTimeOff.staffId,staffId),eq(staffTimeOff.date,date))).limit(1); if(existing[0]) throw new Error("Для этого дня уже указана отгул"); await db.insert(staffTimeOff).values({tenantId,staffId,date,reason:reason?.trim()||null}); return listStaffTimeOff(tenantId,staffId); }
 export async function deleteStaffTimeOff(tenantId:number,staffId:number,timeOffId:number) { const db=await getDb(); if(!db) throw new Error("Database is not available"); await db.delete(staffTimeOff).where(and(eq(staffTimeOff.id,timeOffId),eq(staffTimeOff.tenantId,tenantId),eq(staffTimeOff.staffId,staffId))); return listStaffTimeOff(tenantId,staffId); }
