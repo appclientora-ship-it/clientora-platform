@@ -2,7 +2,6 @@ import { and, desc, eq, gte, isNull, lte, ne } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users } from "../drizzle/schema";
-import { ENV } from './_core/env';
 import { buildBookingDemand } from './bookingDemand';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -13,8 +12,8 @@ export async function getDb() {
   return _db;
 }
 
-// Role is deliberately excluded from caller input. Only the trusted OWNER_OPEN_ID
-// bootstrap may receive platform-admin privileges; profile upserts cannot promote users.
+// Identity/profile synchronization must never grant or revoke platform privileges.
+// Super-admin role changes are handled only by the audited platformAdmin service.
 export async function upsertUser(user: Omit<InsertUser, "role">): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb(); if (!db) throw new Error("Database is not available");
@@ -24,10 +23,6 @@ export async function upsertUser(user: Omit<InsertUser, "role">): Promise<void> 
     if (user[field] !== undefined) { values[field] = user[field] ?? null; updateSet[field] = user[field] ?? null; }
   });
   if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
-  if (ENV.ownerOpenId && user.openId === ENV.ownerOpenId) {
-    values.role = 'admin';
-    updateSet.role = 'admin';
-  }
   values.lastSignedIn ??= new Date();
   if (!Object.keys(updateSet).length) updateSet.lastSignedIn = new Date();
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });

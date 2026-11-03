@@ -5,6 +5,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { adminProcedure, protectedProcedure, publicProcedure, router, loginProcedure, registrationProcedure, passwordResetProcedure, publicBookingReadProcedure, publicBookingCreateProcedure, publicReviewProcedure } from "./_core/trpc";
 import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, createTelegramLinkCode, getTenantAccessContext, listUserTenantMemberships, listEmployeeBookings, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, publishBookingReview, saveStaffHours, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, updateUserLanguage, userCanManageTenant } from "./db";
 import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, sessionForUser } from "./localAuth";
+import { listPlatformAdminAuditLogs, setPlatformAdminRole } from "./platformAdmin";
 
 export const appRouter = router({
   system: router({ health: publicProcedure.query(() => ({ ok: true })) }),
@@ -19,6 +20,18 @@ export const appRouter = router({
   }),
   platform: router({
     tenants: adminProcedure.query(() => listTenants()),
+    adminAuditLogs: adminProcedure.query(() => listPlatformAdminAuditLogs()),
+    setSuperAdminRole: adminProcedure
+      .input(z.object({
+        userId: z.number().int().positive(),
+        enabled: z.boolean(),
+        reason: z.string().max(500).optional(),
+      }))
+      .mutation(({ ctx, input }) => setPlatformAdminRole(ctx.user.id, input.userId, input.enabled, {
+        reason: input.reason,
+        ip: ctx.req.ip || ctx.req.socket.remoteAddress,
+        userAgent: ctx.req.get("user-agent"),
+      })),
   }),
   publicBooking: router({
     catalog: publicBookingReadProcedure.input(z.object({ slug: z.string().min(2) })).query(({ input }) => getPublicBookingCatalog(input.slug)),

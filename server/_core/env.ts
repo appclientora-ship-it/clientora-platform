@@ -1,7 +1,6 @@
 // Clientora runtime configuration. No Manus or external platform credentials.
 export const ENV = {
   get databaseUrl() { return process.env.DATABASE_URL ?? ""; },
-  get ownerOpenId() { return process.env.OWNER_OPEN_ID ?? ""; },
   get isProduction() { return process.env.NODE_ENV === "production"; },
   get s3Endpoint() { return process.env.S3_ENDPOINT ?? ""; },
   get s3Region() { return process.env.S3_REGION || "auto"; },
