@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import mysql from "mysql2/promise";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapFirstSuperAdmin, setPlatformAdminRole } from "./platformAdmin";
 import { registerLocalUser, loginLocalUser } from "./localAuth";
 import { upsertUser } from "./db";
@@ -26,9 +26,22 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     connection = await mysql.createConnection(databaseUrl!);
   });
 
+  afterEach(async () => {
+    if (connection) {
+      await connection.execute("UPDATE platformAdminBootstrap SET claimedAt = NULL, claimedByUserId = NULL WHERE id = 1");
+      for (const id of createdUserIds) await connection.execute("UPDATE users SET role = 'user' WHERE id = ?", [id]);
+    }
+  });
+
   afterAll(async () => {
     if (connection) {
-      await connection.execute("DELETE FROM platformAdminAuditLogs WHERE targetUserId IN (?) OR actorUserId IN (?)", [createdUserIds.length ? createdUserIds : [0], createdUserIds.length ? createdUserIds : [0]]);
+      if (createdUserIds.length) {
+        const placeholders = createdUserIds.map(() => "?").join(",");
+        await connection.execute(
+          `DELETE FROM platformAdminAuditLogs WHERE targetUserId IN (${placeholders}) OR actorUserId IN (${placeholders})`,
+          [...createdUserIds, ...createdUserIds],
+        );
+      }
       for (const id of createdUserIds) await connection.execute("DELETE FROM users WHERE id = ?", [id]);
       for (const key of rateKeys) {
         const hash = createHash("sha256").update(key).digest("hex");
