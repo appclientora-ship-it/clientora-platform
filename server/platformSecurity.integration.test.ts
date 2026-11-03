@@ -46,6 +46,8 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
           [...createdUserIds, ...createdUserIds],
         );
       }
+      for (const id of createdTenantIds) await connection.execute("DELETE FROM staffInvites WHERE tenantId = ?", [id]);
+      for (const id of createdTenantIds) await connection.execute("DELETE FROM staff WHERE tenantId = ?", [id]);
       for (const id of createdTenantIds) await connection.execute("DELETE FROM tenantMembers WHERE tenantId = ?", [id]);
       for (const id of createdTenantIds) await connection.execute("DELETE FROM tenants WHERE id = ?", [id]);
       for (const id of createdUserIds) await connection.execute("DELETE FROM emailVerifications WHERE userId = ?", [id]);
@@ -120,6 +122,43 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
     await connection.execute("UPDATE users SET emailVerifiedAt = NOW(3) WHERE id = ?", [user.id]);
     expect((await loginLocalUser(email.toUpperCase(), "Integration-test-password-123")).id).toBe(user.id);
     await expect(registerLocalUser({ name: "Duplicate", email, password: "Another-password-123" })).rejects.toThrow("هذا البريد مسجل بالفعل");
+  });
+
+  it("rejects staff invitation redemption when the tenant is suspended", async () => {
+    const slug = `suspended-invite-${randomUUID().slice(0, 8)}`;
+    const [tenantResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO tenants (name, slug, status, currency) VALUES (?, ?, 'suspended', 'OMR')",
+      ["Suspended Invitation Tenant", slug],
+    );
+    const tenantId = Number(tenantResult.insertId);
+    createdTenantIds.push(tenantId);
+    const [staffResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO staff (tenantId, name, role, active) VALUES (?, ?, ?, 1)",
+      [tenantId, "Invited Staff", "Barber"],
+    );
+    const staffId = Number(staffResult.insertId);
+    const code = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
+    await connection.execute(
+      "INSERT INTO staffInvites (tenantId, staffId, email, code, role, expiresAt, createdByUserId) VALUES (?, ?, NULL, ?, 'staff', DATE_ADD(NOW(3), INTERVAL 1 DAY), 1)",
+      [tenantId, staffId, code],
+    );
+    const email = `suspended-${randomUUID()}@clientora.test`;
+    await expect(registerLocalUser({
+      name: "Suspended Invite",
+      email,
+      password: "Integration-test-password-123",
+      inviteCode: code,
+    })).rejects.toThrow("كود الدعوة غير صالح أو منتهي");
+    const [usersFound] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT id FROM users WHERE email = ?",
+      [email],
+    );
+    expect(usersFound).toHaveLength(0);
+    const [staffRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT userId FROM staff WHERE id = ?",
+      [staffId],
+    );
+    expect(staffRows[0]?.userId).toBeNull();
   });
 
   it("prevents staff and managers from creating a separate owner workspace", async () => {

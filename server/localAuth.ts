@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import nodemailer from "nodemailer";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, ne } from "drizzle-orm";
 import { getDb } from "./db";
 import { consumeSharedRateLimit } from "./_core/rateLimit";
-import { passwordResets, emailVerifications, users, staffInvites, tenantMembers, staff, type User } from "../drizzle/schema";
+import { passwordResets, emailVerifications, users, staffInvites, tenantMembers, staff, tenants, type User } from "../drizzle/schema";
 
 const SESSION_COOKIE = "clientora_session";
 const REMEMBERED_SESSION_TTL = 1000 * 60 * 60 * 24 * 30;
@@ -73,11 +73,15 @@ export async function registerLocalUser(input: {email:string;password:string;nam
   if (input.inviteCode) {
     const now = new Date();
     return db.transaction(async tx => {
-      const invite = (await tx.select().from(staffInvites).where(and(
-        eq(staffInvites.code, input.inviteCode!),
-        isNull(staffInvites.acceptedAt),
-        gt(staffInvites.expiresAt, now),
-      )).limit(1))[0];
+      const inviteRow = (await tx.select({ invite: staffInvites }).from(staffInvites)
+        .innerJoin(tenants, eq(staffInvites.tenantId, tenants.id))
+        .where(and(
+          eq(staffInvites.code, input.inviteCode!),
+          isNull(staffInvites.acceptedAt),
+          gt(staffInvites.expiresAt, now),
+          ne(tenants.status, "suspended"),
+        )).limit(1))[0];
+      const invite = inviteRow?.invite;
       if (!invite || !invite.staffId) throw new Error("كود الدعوة غير صالح أو منتهي؛ اطلب دعوة جديدة من صاحب الشركة");
       if (invite.email && invite.email.trim().toLowerCase() !== email) throw new Error("هذا الكود مخصص لبريد إلكتروني آخر");
       const result = await tx.insert(users).values({
