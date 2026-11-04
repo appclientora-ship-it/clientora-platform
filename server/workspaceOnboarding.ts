@@ -6,6 +6,9 @@ export async function createOwnerWorkspaceWithPlan(
   userId: number,
   input: { name: string; slug: string; city?: string; countryCode: string; currency: string; timezone: string; planKey: string },
 ) {
+  try { new Intl.DateTimeFormat("en-US", { timeZone: input.timezone }).format(new Date()); }
+  catch { throw new Error("المنطقة الزمنية غير صحيحة؛ اختر دولة مدعومة"); }
+  if (!/^[A-Z]{2}$/.test(input.countryCode) || !/^[A-Z]{3}$/.test(input.currency)) throw new Error("بيانات الدولة أو العملة غير صحيحة");
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة");
   try {
