@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import { and, eq, gt, isNull, ne, or } from "drizzle-orm";
 import { getDb } from "./db";
 import { consumeSharedRateLimit } from "./_core/rateLimit";
+import { hashStaffInviteCode } from "./staffInviteSecurity";
 import { passwordResets, emailVerifications, users, staffInvites, tenantMembers, staff, tenants, type User } from "../drizzle/schema";
 
 const SESSION_COOKIE = "clientora_session";
@@ -73,7 +74,7 @@ export async function registerLocalUser(input: {email:string;password:string;nam
   if (input.inviteCode) {
     const now = new Date();
     const normalizedInviteCode = input.inviteCode.trim();
-    const inviteCodeHash = crypto.createHash("sha256").update(normalizedInviteCode).digest("hex");
+    const inviteCodeHash = hashStaffInviteCode(normalizedInviteCode);
     return db.transaction(async tx => {
       const inviteRow = (await tx.select({ invite: staffInvites }).from(staffInvites)
         .innerJoin(tenants, eq(staffInvites.tenantId, tenants.id))
