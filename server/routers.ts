@@ -6,6 +6,7 @@ import { adminProcedure, protectedProcedure, publicProcedure, router, loginProce
 import { addStaff, addTenantClientNote, createBookingReview, createDashboardBooking, createExpense, createPublicBooking, createStaffInvite, createTenantForUser, createTenantService, getEmployeeReports, getPublicBookingCatalog, getPublicBookingSlots, getPublicBookingSlotsByStaff, getSmartScheduleSuggestions, getTenantForUser, createTelegramLinkCode, getTenantAccessContext, listUserTenantMemberships, listEmployeeBookings, getTenantClientProfile, listTenantClients, listBookingReviews, listBookings, listDetailedBookings, listExpenses, listNotifications, listStaffHours, listStaffInvites, listStaffTimeOff, addStaffTimeOff, deleteStaffTimeOff, listTenantServices, listTenantStaff, listTenants, listSubscriptionPlans, updateTenantSubscription, publishBookingReview, saveStaffHours, updateBookingForTenant, updateStaff, updateTenantService, updateTenantSettings, updateUserLanguage, userCanManageTenant } from "./db";
 import { localSessionCookie, loginLocalUser, registerLocalUser, requestPasswordReset, resetPassword, sessionForUser, sendEmailVerification, verifyEmailToken, resendEmailVerification } from "./localAuth";
 import { listPlatformAdminAuditLogs, setPlatformAdminRole } from "./platformAdmin";
+import { createOwnerWorkspaceWithPlan, getOwnerOnboardingPlans } from "./workspaceOnboarding";
 
 export const appRouter = router({
   system: router({ health: publicProcedure.query(() => ({ ok: true })) }),
@@ -57,6 +58,12 @@ export const appRouter = router({
     }),
   }),
   workspace: router({
+    onboardingPlans: protectedProcedure.query(() => getOwnerOnboardingPlans()),
+    finishOwnerOnboarding: protectedProcedure.input(z.object({name:z.string().trim().min(2).max(160),slug:z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).min(2).max(120),city:z.string().trim().max(120).optional(),countryCode:z.string().regex(/^[A-Z]{2}$/),currency:z.string().min(1).max(12),timezone:z.string().min(1).max(64),planKey:z.string().min(1).max(16)})).mutation(async ({ctx,input}) => {
+      if (ctx.user.role === "admin") throw new TRPCError({code:"FORBIDDEN",message:"حساب إدارة المنصة لا ينشئ مساحة صالون"});
+      try { return await createOwnerWorkspaceWithPlan(ctx.user.id,input); }
+      catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر إكمال إعداد مساحة العمل"}); }
+    }),
     memberships: protectedProcedure.query(({ctx}) => listUserTenantMemberships(ctx.user)),
     current: protectedProcedure.input(z.object({tenantId:z.number().int().positive().optional()}).optional()).query(({ ctx, input }) => getTenantForUser(ctx.user,input?.tenantId)),
     createTelegramLinkCode: protectedProcedure.mutation(({ ctx }) => createTelegramLinkCode(ctx.user.id)),
