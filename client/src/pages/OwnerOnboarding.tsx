@@ -31,7 +31,7 @@ export default function OwnerOnboarding() {
   const [planKey, setPlanKey] = useState("");
   const country = countries.find(item => item.code === countryCode) ?? countries[0];
   const create = trpc.workspace.finishOwnerOnboarding.useMutation({
-    onSuccess: () => { memberships.refetch(); navigate("/"); },
+    onSuccess: async () => { await memberships.refetch(); navigate("/"); },
   });
   const selectedPlan = plans.data?.find(plan => plan.planKey === planKey);
   const slugFromName = (value: string) => value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 110);
