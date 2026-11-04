@@ -5,6 +5,15 @@ import { useLocation } from "wouter";
 export type AppLanguage = "ar" | "en" | "ru";
 const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> = {
   en: {
+    "سلطنة عُمان":"Oman",
+    "الإمارات":"United Arab Emirates",
+    "السعودية":"Saudi Arabia",
+    "قطر":"Qatar",
+    "الكويت":"Kuwait",
+    "البحرين":"Bahrain",
+    "مصر":"Egypt",
+    "المملكة المتحدة":"United Kingdom",
+    "الولايات المتحدة":"United States",
     "تأكيد البريد الإلكتروني":"Verify your email",
     "اضغط على الزر لتأكيد بريدك الإلكتروني وتفعيل حسابك.":"Select the button to verify your email and activate your account.",
     "تم إنشاء الحساب. أرسلنا رابط تأكيد إلى ":"Account created. We sent a verification link to ",
@@ -324,6 +333,15 @@ const dictionaries: Record<Exclude<AppLanguage, "ar">, Record<string, string>> =
     "تعذر تحميل مساحة العمل. أعد المحاولة.":"Could not load workspace. Please try again.",
   },
   ru: {
+    "سلطنة عُمان":"Оман",
+    "الإمارات":"Объединённые Арабские Эмираты",
+    "السعودية":"Саудовская Аравия",
+    "قطر":"Катар",
+    "الكويت":"Кувейт",
+    "البحرين":"Бахрейн",
+    "مصر":"Египет",
+    "المملكة المتحدة":"Великобритания",
+    "الولايات المتحدة":"США",
     "تأكيد البريد الإلكتروني":"Подтвердить электронную почту",
     "اضغط على الزر لتأكيد بريدك الإلكتروني وتفعيل حسابك.":"Нажмите кнопку, чтобы подтвердить электронную почту и активировать аккаунт.",
     "تم إنشاء الحساب. أرسلنا رابط تأكيد إلى ":"Аккаунт создан. Ссылка для подтверждения отправлена на адрес ",
