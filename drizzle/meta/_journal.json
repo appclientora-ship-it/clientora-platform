@@ -134,6 +134,13 @@
       "when": 1793711400000,
       "tag": "0021_restore_solo_five_usd",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1793790000000,
+      "tag": "0022_staff_invite_token_hash",
+      "breakpoints": true
     }
   ]
 }
