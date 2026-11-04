@@ -61,6 +61,7 @@ export const appRouter = router({
     onboardingPlans: protectedProcedure.query(() => getOwnerOnboardingPlans()),
     finishOwnerOnboarding: protectedProcedure.input(z.object({name:z.string().trim().min(2).max(160),slug:z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).min(2).max(120),city:z.string().trim().max(120).optional(),countryCode:z.string().regex(/^[A-Z]{2}$/),currency:z.string().min(1).max(12),timezone:z.string().min(1).max(64),planKey:z.string().min(1).max(16)})).mutation(async ({ctx,input}) => {
       if (ctx.user.role === "admin") throw new TRPCError({code:"FORBIDDEN",message:"حساب إدارة المنصة لا ينشئ مساحة صالون"});
+      if (ctx.user.emailVerificationRequired && !ctx.user.emailVerifiedAt) throw new TRPCError({code:"FORBIDDEN",message:"يجب تأكيد البريد الإلكتروني قبل إنشاء مساحة العمل"});
       try { return await createOwnerWorkspaceWithPlan(ctx.user.id,input); }
       catch(error) { throw new TRPCError({code:"BAD_REQUEST",message:error instanceof Error?error.message:"تعذر إكمال إعداد مساحة العمل"}); }
     }),
