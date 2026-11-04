@@ -6,7 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import PlatformAdmin from "./pages/PlatformAdmin";
-import PlatformLogin from "./pages/PlatformLogin";
+import { PlatformLogin } from "./pages/PlatformLogin";
 import OnlineBooking from "./pages/OnlineBooking";
 import AuthPage from "./pages/AuthPage";
 import OwnerOnboarding from "./pages/OwnerOnboarding";
