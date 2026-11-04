@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import nodemailer from "nodemailer";
-import { and, eq, gt, isNull, ne } from "drizzle-orm";
+import { and, eq, gt, isNull, ne, or } from "drizzle-orm";
 import { getDb } from "./db";
 import { consumeSharedRateLimit } from "./_core/rateLimit";
 import { passwordResets, emailVerifications, users, staffInvites, tenantMembers, staff, tenants, type User } from "../drizzle/schema";
@@ -72,15 +72,20 @@ export async function registerLocalUser(input: {email:string;password:string;nam
   const hashedPassword = await passwordHash(input.password);
   if (input.inviteCode) {
     const now = new Date();
+    const normalizedInviteCode = input.inviteCode.trim();
+    const inviteCodeHash = crypto.createHash("sha256").update(normalizedInviteCode).digest("hex");
     return db.transaction(async tx => {
       const inviteRow = (await tx.select({ invite: staffInvites }).from(staffInvites)
         .innerJoin(tenants, eq(staffInvites.tenantId, tenants.id))
         .where(and(
-          eq(staffInvites.code, input.inviteCode!),
+          or(
+            eq(staffInvites.codeHash, inviteCodeHash),
+            eq(staffInvites.code, normalizedInviteCode),
+          ),
           isNull(staffInvites.acceptedAt),
           gt(staffInvites.expiresAt, now),
           ne(tenants.status, "suspended"),
-        )).limit(1))[0];
+        )).for("update").limit(1))[0];
       const invite = inviteRow?.invite;
       if (!invite || !invite.staffId) throw new Error("كود الدعوة غير صالح أو منتهي؛ اطلب دعوة جديدة من صاحب الشركة");
       if (invite.email && invite.email.trim().toLowerCase() !== email) throw new Error("هذا الكود مخصص لبريد إلكتروني آخر");
