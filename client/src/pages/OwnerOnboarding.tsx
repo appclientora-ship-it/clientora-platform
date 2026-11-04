@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import type { CSSProperties } from "react";
 import { Redirect, useLocation } from "wouter";
 import { Building2, Check, Globe2, LoaderCircle, MapPin, Sparkles, Users } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -61,5 +62,5 @@ export default function OwnerOnboarding() {
     </div>
   </main>;
 }
-const field: React.CSSProperties = { display: "grid", gap: 8, fontWeight: 650, fontSize: 14 };
-const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid #d9e4e1", borderRadius: 11, padding: "12px 13px", background: "white", color: "#173b35", outlineColor: "#0d8f83", font: "inherit" };
+const field: CSSProperties = { display: "grid", gap: 8, fontWeight: 650, fontSize: 14 };
+const input: CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid #d9e4e1", borderRadius: 11, padding: "12px 13px", background: "white", color: "#173b35", outlineColor: "#0d8f83", font: "inherit" };
