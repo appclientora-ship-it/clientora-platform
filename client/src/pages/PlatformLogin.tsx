@@ -10,6 +10,7 @@ export function PlatformLogin() {
   const auth = trpc.auth.me.useQuery();
   const login = trpc.auth.login.useMutation();
   const logout = trpc.auth.logout.useMutation();
+  const utils = trpc.useUtils();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -29,6 +30,7 @@ export function PlatformLogin() {
         setError(t("هذا الحساب ليس لديه صلاحية إدارة المنصة."));
         return;
       }
+      await utils.auth.me.invalidate();
       navigate("/platform");
     } catch (cause) {
       setError(cause instanceof Error ? t(cause.message) : t("تعذر تسجيل الدخول. حاول مرة أخرى."));
