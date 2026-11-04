@@ -68,7 +68,7 @@ export const staffTimeOff = mysqlTable("staffTimeOff", {
 
 export { platformAdminBootstrap, platformAdminAuditLogs, rateLimitBuckets } from "./platformSecuritySchema";
 export const staffInvites = mysqlTable("staffInvites", {
-  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), staffId: int("staffId"), email: varchar("email", { length: 320 }), code: varchar("code", { length: 64 }).notNull().unique(), role: mysqlEnum("role", ["staff", "manager"]).default("staff").notNull(), expiresAt: timestamp("expiresAt").notNull(), acceptedAt: timestamp("acceptedAt"), createdByUserId: int("createdByUserId").notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), staffId: int("staffId"), email: varchar("email", { length: 320 }), code: varchar("code", { length: 64 }).unique(), codeHash: varchar("codeHash", { length: 64 }).unique(), role: mysqlEnum("role", ["staff", "manager"]).default("staff").notNull(), expiresAt: timestamp("expiresAt").notNull(), acceptedAt: timestamp("acceptedAt"), createdByUserId: int("createdByUserId").notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export const services = mysqlTable("services", {
   id: int("id").autoincrement().primaryKey(), tenantId: int("tenantId").notNull(), name: varchar("name", { length: 160 }).notNull(), category: varchar("category", { length: 120 }).default("عام").notNull(), durationMinutes: int("durationMinutes").notNull(), price: int("price").notNull(), active: int("active").default(1).notNull(),

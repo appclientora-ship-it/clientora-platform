@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, auditLogs, bookingItems, bookingReviews, bookings, clientNotes, clients, expenses, notifications, services, staff, staffBreaks, staffInvites, staffTimeOff, staffWorkingHours, telegramLinks, telegramLinkTokens, tenants, tenantMembers, users, subscriptionPlans, tenantSubscriptions, subscriptionEvents } from "../drizzle/schema";
 import { buildBookingDemand } from './bookingDemand';
+import { hashStaffInviteCode } from "./staffInviteSecurity";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
@@ -941,7 +942,20 @@ export async function updateStaff(tenantId:number,staffId:number,input:{name?:st
     return (await tx.select().from(staff).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))).limit(1))[0];
   });
 }
-export async function listStaffInvites(tenantId:number) { const db=await getDb(); return db ? db.select().from(staffInvites).where(eq(staffInvites.tenantId,tenantId)).orderBy(desc(staffInvites.createdAt)) : []; }
+export async function listStaffInvites(tenantId:number) {
+  const db=await getDb();
+  return db ? db.select({
+    id:staffInvites.id,
+    tenantId:staffInvites.tenantId,
+    staffId:staffInvites.staffId,
+    email:staffInvites.email,
+    role:staffInvites.role,
+    expiresAt:staffInvites.expiresAt,
+    acceptedAt:staffInvites.acceptedAt,
+    createdByUserId:staffInvites.createdByUserId,
+    createdAt:staffInvites.createdAt,
+  }).from(staffInvites).where(eq(staffInvites.tenantId,tenantId)).orderBy(desc(staffInvites.createdAt)) : [];
+}
 export async function createStaffInvite(tenantId:number,createdByUserId:number,input:{email?:string;staffId:number;role?:"staff"|"manager"}) {
   const db=await getDb();
   if(!db) throw new Error("Database is not available");
@@ -959,9 +973,28 @@ export async function createStaffInvite(tenantId:number,createdByUserId:number,i
   if(!employee) throw new Error("الموظف غير موجود في هذه الشركة");
   if(employee.userId) throw new Error("هذا الموظف لديه حساب بالفعل");
   const code=randomBytes(18).toString("hex");
+  const codeHash=hashStaffInviteCode(code);
   const expiresAt=new Date(Date.now()+7*24*60*60*1000);
-  const result=await db.insert(staffInvites).values({tenantId,createdByUserId,email:input.email?.trim().toLowerCase()||null,staffId:input.staffId,role:input.role||"staff",code,expiresAt});
-  return (await db.select().from(staffInvites).where(and(eq(staffInvites.id,Number(result[0].insertId)),eq(staffInvites.tenantId,tenantId))).limit(1))[0];
+  const result=await db.insert(staffInvites).values({
+    tenantId,createdByUserId,email:input.email?.trim().toLowerCase()||null,
+    staffId:input.staffId,role:input.role||"staff",code:null,codeHash,expiresAt,
+  });
+  const createdInvite=(await db.select({
+    id:staffInvites.id,
+    tenantId:staffInvites.tenantId,
+    staffId:staffInvites.staffId,
+    email:staffInvites.email,
+    role:staffInvites.role,
+    expiresAt:staffInvites.expiresAt,
+    acceptedAt:staffInvites.acceptedAt,
+    createdByUserId:staffInvites.createdByUserId,
+    createdAt:staffInvites.createdAt,
+  }).from(staffInvites).where(and(
+    eq(staffInvites.id,Number(result[0].insertId)),
+    eq(staffInvites.tenantId,tenantId),
+  )).limit(1))[0];
+  if(!createdInvite) throw new Error("تعذر إنشاء دعوة الموظف");
+  return {...createdInvite,code};
 }
 export async function listStaffTimeOff(tenantId:number,staffId:number) { const db=await getDb(); return db ? db.select().from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenantId),eq(staffTimeOff.staffId,staffId))).orderBy(staffTimeOff.date) : []; }
 export async function addStaffTimeOff(tenantId:number,staffId:number,date:string,reason?:string) { const db=await getDb(); if(!db) throw new Error("Database is not available"); if (!isValidBookingDate(date)) throw new Error("تاريخ الإجازة غير صحيح"); const member=await db.select({id:staff.id}).from(staff).where(and(eq(staff.id,staffId),eq(staff.tenantId,tenantId))).limit(1); if(!member[0]) throw new Error("Сотрудник не найден"); const existing=await db.select({id:staffTimeOff.id}).from(staffTimeOff).where(and(eq(staffTimeOff.tenantId,tenantId),eq(staffTimeOff.staffId,staffId),eq(staffTimeOff.date,date))).limit(1); if(existing[0]) throw new Error("Для этого дня уже указана отгул"); await db.insert(staffTimeOff).values({tenantId,staffId,date,reason:reason?.trim()||null}); return listStaffTimeOff(tenantId,staffId); }

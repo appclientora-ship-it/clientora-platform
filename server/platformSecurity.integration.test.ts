@@ -3,8 +3,9 @@ import mysql from "mysql2/promise";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapFirstSuperAdmin, setPlatformAdminRole } from "./platformAdmin";
 import { registerLocalUser, loginLocalUser, createEmailVerificationToken, verifyEmailToken, resendEmailVerification } from "./localAuth";
-import { addStaff, createTenantForUser, upsertUser, listSubscriptionPlans, updateTenantSubscription, runSubscriptionMaintenance } from "./db";
+import { addStaff, createTenantForUser, upsertUser, listStaffInvites, listSubscriptionPlans, updateTenantSubscription, runSubscriptionMaintenance } from "./db";
 import { consumeSharedRateLimit } from "./_core/rateLimit";
+import { hashStaffInviteCode } from "./staffInviteSecurity";
 import { createContext } from "./_core/context";
 import { sessionForUser } from "./localAuth";
 
@@ -253,6 +254,104 @@ describe.skipIf(!safeTestDatabase)("platform security integration (isolated MySQ
       [tenantId],
     );
     expect(Number(eventsAfterRetry[0]?.total)).toBe(Number(eventsBeforeRetry[0]?.total));
+  });
+
+  it("redeems a hashed staff invitation and omits token fields from invite listings", async () => {
+    const slug = `hashed-invite-${randomUUID().slice(0, 8)}`;
+    const [tenantResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO tenants (name, slug, status, currency) VALUES (?, ?, 'trial', 'OMR')",
+      ["Hashed Invitation Tenant", slug],
+    );
+    const tenantId = Number(tenantResult.insertId);
+    createdTenantIds.push(tenantId);
+    const [staffResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO staff (tenantId, name, role, active) VALUES (?, ?, ?, 1)",
+      [tenantId, "Hashed Invite Staff", "Barber"],
+    );
+    const staffId = Number(staffResult.insertId);
+    const code = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
+    const codeHash = hashStaffInviteCode(code);
+    await connection.execute(
+      "INSERT INTO staffInvites (tenantId, staffId, email, code, codeHash, role, expiresAt, createdByUserId) VALUES (?, ?, NULL, NULL, ?, 'staff', DATE_ADD(NOW(3), INTERVAL 1 DAY), 1)",
+      [tenantId, staffId, codeHash],
+    );
+
+    const listedInvites = await listStaffInvites(tenantId);
+    expect(listedInvites).toHaveLength(1);
+    expect(listedInvites[0]).not.toHaveProperty("code");
+    expect(listedInvites[0]).not.toHaveProperty("codeHash");
+
+    const email = `hashed-invite-${randomUUID()}@clientora.test`;
+    const user = await registerLocalUser({
+      name: "Hashed Invite User",
+      email,
+      password: "Integration-test-password-123",
+      inviteCode: code,
+    });
+    createdUserIds.push(user.id);
+    const [inviteRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT code, codeHash, acceptedAt FROM staffInvites WHERE tenantId = ?",
+      [tenantId],
+    );
+    expect(inviteRows[0]?.code).toBeNull();
+    expect(inviteRows[0]?.codeHash).toBe(codeHash);
+    expect(inviteRows[0]?.acceptedAt).toBeTruthy();
+    const [staffRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT userId FROM staff WHERE id = ?",
+      [staffId],
+    );
+    expect(Number(staffRows[0]?.userId)).toBe(user.id);
+  });
+
+  it("allows only one concurrent redemption of a staff invitation", async () => {
+    const slug = `invite-race-${randomUUID().slice(0, 8)}`;
+    const [tenantResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO tenants (name, slug, status, currency) VALUES (?, ?, 'trial', 'OMR')",
+      ["Invite Race Tenant", slug],
+    );
+    const tenantId = Number(tenantResult.insertId);
+    createdTenantIds.push(tenantId);
+    const [staffResult] = await connection.execute<mysql.ResultSetHeader>(
+      "INSERT INTO staff (tenantId, name, role, active) VALUES (?, ?, ?, 1)",
+      [tenantId, "Race Invite Staff", "Barber"],
+    );
+    const staffId = Number(staffResult.insertId);
+    const code = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
+    await connection.execute(
+      "INSERT INTO staffInvites (tenantId, staffId, email, code, codeHash, role, expiresAt, createdByUserId) VALUES (?, ?, NULL, NULL, ?, 'staff', DATE_ADD(NOW(3), INTERVAL 1 DAY), 1)",
+      [tenantId, staffId, hashStaffInviteCode(code)],
+    );
+    const emails = [
+      `invite-race-a-${randomUUID()}@clientora.test`,
+      `invite-race-b-${randomUUID()}@clientora.test`,
+    ];
+    const attempts = await Promise.allSettled(emails.map((email, index) => registerLocalUser({
+      name: `Invite Race ${index}`,
+      email,
+      password: "Integration-test-password-123",
+      inviteCode: code,
+    })));
+    const successful = attempts.filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof registerLocalUser>>> => result.status === "fulfilled");
+    const failed = attempts.filter(result => result.status === "rejected");
+    expect(successful).toHaveLength(1);
+    expect(failed).toHaveLength(1);
+    if (successful[0]) createdUserIds.push(successful[0].value.id);
+
+    const [inviteRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT acceptedAt FROM staffInvites WHERE tenantId = ?",
+      [tenantId],
+    );
+    expect(inviteRows[0]?.acceptedAt).toBeTruthy();
+    const [staffRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT userId FROM staff WHERE id = ?",
+      [staffId],
+    );
+    expect(Number(staffRows[0]?.userId)).toBe(successful[0].value.id);
+    const [userRows] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT id FROM users WHERE email IN (?, ?)",
+      emails,
+    );
+    expect(userRows).toHaveLength(1);
   });
 
   it("rejects staff invitation redemption when the tenant is suspended", async () => {
